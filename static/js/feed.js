@@ -8,6 +8,8 @@ export class Feed {
     this.retryMs = 1000;
     this.connListeners = new Set();
     this.globalListeners = new Set();
+    this.lastGlobal = new Map(); // latest global message per type, replayed to late listeners
+    this.quoteSymbols = [];
     this.connect();
   }
 
@@ -18,10 +20,21 @@ export class Feed {
   /** Messages not tied to a subscription (e.g. Gateway status). */
   onGlobal(cb) {
     this.globalListeners.add(cb);
+    for (const m of this.lastGlobal.values()) cb(m);
   }
 
   resubscribeAll() {
     for (const id of this.subs.keys()) this.send(id);
+  }
+
+  /** Sets the symbols to stream live quotes for (replaces the previous set). */
+  setQuotes(symbols) {
+    this.quoteSymbols = [...new Set(symbols)];
+    this.sendQuotes();
+  }
+
+  sendQuotes() {
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'quotes', symbols: this.quoteSymbols }));
   }
 
   connect() {
@@ -31,6 +44,7 @@ export class Feed {
       this.retryMs = 1000;
       this.connListeners.forEach((cb) => cb(true));
       for (const id of this.subs.keys()) this.send(id);
+      this.sendQuotes();
     };
     ws.onclose = () => {
       this.connListeners.forEach((cb) => cb(false));
@@ -39,7 +53,11 @@ export class Feed {
     };
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
-      if (m.id === undefined) { this.globalListeners.forEach((cb) => cb(m)); return; }
+      if (m.id === undefined) {
+        if (m.type !== 'quote') this.lastGlobal.set(m.type, m);
+        this.globalListeners.forEach((cb) => cb(m));
+        return;
+      }
       const sub = this.subs.get(m.id);
       if (!sub || sub.seq !== m.seq) return; // stale reply
       if (m.type === 'ended') {

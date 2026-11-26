@@ -38,6 +38,10 @@ enum ClientMsg {
     Unsubscribe {
         id: String,
     },
+    /// Replaces the set of symbols this connection wants live quotes for.
+    Quotes {
+        symbols: Vec<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -116,6 +120,8 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
     // Active subscriptions by id. Aborting a task drops its IB subscription,
     // which sends the cancel to the Gateway.
     let mut active: HashMap<String, JoinHandle<()>> = HashMap::new();
+    // Watchlist quote forwarders by symbol.
+    let mut quotes: HashMap<String, JoinHandle<()>> = HashMap::new();
 
     while let Some(Ok(msg)) = incoming.next().await {
         let Message::Text(text) = msg else { continue };
@@ -149,12 +155,56 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
                     h.abort();
                 }
             }
+            Ok(ClientMsg::Quotes { symbols }) => {
+                let wanted: std::collections::HashSet<String> = symbols
+                    .iter()
+                    .map(|s| s.trim().to_uppercase())
+                    .filter(|s| !s.is_empty())
+                    .take(200)
+                    .collect();
+                for sym in quotes.keys().filter(|s| !wanted.contains(*s)).cloned().collect::<Vec<_>>() {
+                    if let Some(h) = quotes.remove(&sym) {
+                        h.abort();
+                    }
+                    st.quotes.unsubscribe(&sym).await;
+                }
+                for sym in wanted {
+                    if quotes.contains_key(&sym) {
+                        continue;
+                    }
+                    let (mut rx, latest) = st.quotes.subscribe(&sym).await;
+                    let tx = tx.clone();
+                    quotes.insert(
+                        sym,
+                        tokio::spawn(async move {
+                            if let Some(q) = latest {
+                                let _ = tx.send(json!({"type": "quote", "quote": *q}).to_string()).await;
+                            }
+                            loop {
+                                match rx.recv().await {
+                                    Ok(q) => {
+                                        if tx.send(json!({"type": "quote", "quote": *q}).to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                                    Err(_) => break,
+                                }
+                            }
+                        }),
+                    );
+                }
+            }
             Err(e) => tracing::debug!("bad client message: {e}"),
         }
     }
 
     for (_, h) in active {
         h.abort();
+    }
+    for (sym, h) in quotes {
+        h.abort();
+        st.quotes.unsubscribe(&sym).await;
     }
     gw_task.abort();
     writer.abort();

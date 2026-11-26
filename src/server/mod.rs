@@ -23,6 +23,7 @@ pub struct AppState {
     pub ib: Arc<Ib>,
     pub store: Store,
     pub gateway: Arc<Gateway>,
+    pub quotes: Arc<crate::quotes::QuoteHub>,
     /// Only accept requests addressed to localhost (blocks DNS-rebinding attacks).
     pub loopback_only: bool,
 }

@@ -13,6 +13,7 @@ mod contracts;
 mod desktop;
 mod gateway;
 mod ib;
+mod quotes;
 mod server;
 mod store;
 mod timeframe;
@@ -116,9 +117,10 @@ async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
     tracing::info!("chart UI at {url}");
 
     let state = server::AppState {
-        ib,
+        ib: ib.clone(),
         store,
         gateway: gateway.clone(),
+        quotes: quotes::QuoteHub::new(ib.clone()),
         loopback_only: addr.ip().is_loopback(),
     };
     tokio::spawn(async move {

@@ -14,14 +14,19 @@
       <input id="symbol" type="text" spellcheck="false" autocomplete="off" placeholder="Symbol" title="AAPL · EUR.USD · /ES · ^SPX · $BTC · 7203:TSEJ:JPY">
       <ul id="suggestions" hidden></ul>
     </div>
+    <button id="wl-star" type="button" title="Add to watchlist">☆</button>
     <div class="group" id="timeframes"></div>
     <div class="group" id="indicators"></div>
     <div class="group"><button id="rth" title="Regular trading hours only">RTH</button></div>
     <div id="status"><span id="dot"></span><span id="status-text">Connecting…</span></div>
+    <button id="wl-toggle" type="button" title="Show / hide watchlist">☰ Watchlist</button>
     <a id="attribution" href="https://www.tradingview.com/" target="_blank" rel="noopener"
        title="Charts by TradingView Lightweight Charts™ — Copyright (c) TradingView, Inc.">Charts by TradingView</a>
   </header>
-  <main id="charts"></main>
+  <div id="workspace">
+    <main id="charts"></main>
+    <aside id="watchlist"></aside>
+  </div>
   <dialog id="gw-dialog"></dialog>
   <script type="module" src="/js/main.js"></script>
 </body>

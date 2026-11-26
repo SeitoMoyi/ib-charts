@@ -9,6 +9,8 @@ TradingView-style charts that run on your own computer and use the market data y
 - **Charts:** candles, volume, SMA 20 / SMA 50 / EMA 200, session VWAP and RSI(14).
 - **Timeframes:** 1m, 5m, 15m, 30m, 1h, 4h, D, W, M, with an RTH-only toggle.
 - **Markets:** stocks (US and international), forex, futures (picks the front month automatically), indices and crypto.
+- **Watchlist** sidebar with live quotes (last, change, % change; delayed data marked **D**), sections, drag to reorder, ☆ to add the current symbol, and ↑/↓ to step through it. Each symbol uses one IB market-data line, no matter how many windows show it.
+- **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.
 
