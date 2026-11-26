@@ -7,8 +7,9 @@
 
 mod contracts;
 mod ib;
+mod server;
+mod store;
 mod timeframe;
-mod web;
 
 use std::sync::Arc;
 
@@ -38,6 +39,11 @@ pub struct Args {
     /// Don't open the browser automatically.
     #[arg(long)]
     pub no_open: bool,
+
+    /// Where watchlists, drawings, scripts and layouts are saved.
+    /// Defaults to the platform's per-user app-data directory.
+    #[arg(long, env = "IB_CHARTS_DATA")]
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
@@ -60,6 +66,12 @@ async fn main() -> Result<()> {
         Err(e) => tracing::warn!("{e:#} — will retry when the chart requests data"),
     }
 
+    let store = store::Store::open(match &args.data_dir {
+        Some(d) => d.clone(),
+        None => store::Store::default_root()?,
+    })?;
+    tracing::info!("data directory: {}", store.root().display());
+
     let listener = tokio::net::TcpListener::bind(&args.listen)
         .await
         .with_context(|| format!("cannot listen on {}", args.listen))?;
@@ -69,7 +81,9 @@ async fn main() -> Result<()> {
         open_browser(&url);
     }
 
-    axum::serve(listener, web::router(ib))
+    let loopback_only = listener.local_addr()?.ip().is_loopback();
+    let state = server::AppState { ib, store, loopback_only };
+    axum::serve(listener, server::router(state))
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })

@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IB Charts</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <header id="toolbar">
@@ -12,37 +13,14 @@
       <input id="symbol" type="text" spellcheck="false" autocomplete="off" placeholder="Symbol" title="AAPL · EUR.USD · /ES · ^SPX · $BTC · 7203:TSEJ:JPY">
       <ul id="suggestions" hidden></ul>
     </div>
-    <div class="group" id="timeframes">
-      <button data-tf="1m">1m</button>
-      <button data-tf="5m">5m</button>
-      <button data-tf="15m">15m</button>
-      <button data-tf="30m">30m</button>
-      <button data-tf="1h">1h</button>
-      <button data-tf="4h">4h</button>
-      <button data-tf="1D">D</button>
-      <button data-tf="1W">W</button>
-      <button data-tf="1M">M</button>
-    </div>
-    <div class="group" id="indicators">
-      <button data-ind="sma20" title="Simple moving average (20)">SMA 20</button>
-      <button data-ind="sma50" title="Simple moving average (50)">SMA 50</button>
-      <button data-ind="ema200" title="Exponential moving average (200)">EMA 200</button>
-      <button data-ind="vwap" title="Session VWAP (intraday only)">VWAP</button>
-      <button data-ind="rsi" title="Relative strength index (14)">RSI</button>
-    </div>
-    <div class="group">
-      <button id="rth" title="Regular trading hours only">RTH</button>
-    </div>
+    <div class="group" id="timeframes"></div>
+    <div class="group" id="indicators"></div>
+    <div class="group"><button id="rth" title="Regular trading hours only">RTH</button></div>
     <div id="status"><span id="dot"></span><span id="status-text">Connecting…</span></div>
+    <a id="attribution" href="https://www.tradingview.com/" target="_blank" rel="noopener"
+       title="Charts by TradingView Lightweight Charts™ — Copyright (c) TradingView, Inc.">Charts by TradingView</a>
   </header>
-  <main>
-    <div id="legend">
-      <div id="legend-title"><span id="legend-symbol"></span> <span id="legend-desc"></span></div>
-      <div id="legend-ohlc"></div>
-    </div>
-    <div id="chart"></div>
-  </main>
-  <script src="/vendor/lightweight-charts.js"></script>
-  <script src="/app.js"></script>
+  <main id="charts"></main>
+  <script type="module" src="/js/main.js"></script>
 </body>
 </html>

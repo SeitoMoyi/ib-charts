@@ -42,6 +42,11 @@ Options can also be set with environment variables: `IB_HOST`, `IB_PORT`, `IB_CL
 | `--client-id` | `77` | Must differ from other API apps on the same Gateway |
 | `--listen` | `127.0.0.1:8088` | Web UI address |
 | `--no-open` | | Don't open the browser |
+| `--data-dir` | per-user app-data dir | Where settings, watchlist, drawings, scripts and layouts are saved |
+
+Your data is saved as plain files you can back up or sync:
+macOS `~/Library/Application Support/io.github.ib-charts/`, Linux `~/.local/share/ib-charts/`,
+Windows `%APPDATA%\ib-charts\data\`.
 
 ## Symbol syntax
 
@@ -76,14 +81,16 @@ browser (Lightweight Charts) ⇄ WebSocket ⇄ ib-charts (axum + ibapi) ⇄ IB G
 
 - `src/contracts.rs`: turns what you type into a fully resolved IB contract via `reqContractDetails`.
 - `src/timeframe.rs`: maps each timeframe to a bar size and history length.
-- `src/web.rs`: HTTP routes, symbol search, and per-tab WebSocket streaming of bars.
-- `src/ib.rs`: shared IB connection that reconnects when needed.
-- `static/`: the UI (plain HTML/CSS/JS, embedded into the binary at compile time).
+- `src/ib.rs`: shared IB connection that reconnects when needed, plus a contract cache.
+- `src/store.rs` + `src/server/store_api.rs`: file-backed storage for UI data.
+- `src/server/`: HTTP routes, request guards, symbol search, WebSocket bar streaming.
+- `static/`: the UI (plain ES modules, no build step), embedded into the binary at compile time.
+  In debug builds the files are read from disk, so UI edits only need a browser refresh.
 
-The server only listens on `127.0.0.1` by default and rejects cross-origin WebSocket connections.
+The server only listens on `127.0.0.1` by default. It rejects requests whose `Host` isn't localhost (DNS rebinding) and cross-origin writes or WebSocket connections (other websites open in your browser).
 
 ## License
 
-MIT. Lightweight Charts™ is © TradingView, Inc., Apache-2.0 (`static/vendor/LIGHTWEIGHT-CHARTS-LICENSE`). Its attribution logo stays visible on the chart, as its license requires.
+MIT. Lightweight Charts™ is © TradingView, Inc., Apache-2.0 (`static/vendor/LIGHTWEIGHT-CHARTS-LICENSE`). As its license requires, the toolbar credits TradingView with a link to tradingview.com (used instead of the on-chart logo); see `static/vendor/NOTICE`.
 
 This project is not affiliated with Interactive Brokers or TradingView.

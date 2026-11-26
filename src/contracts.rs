@@ -12,10 +12,14 @@ use anyhow::{Result, anyhow, bail};
 use ibapi::Client;
 use ibapi::contracts::{Contract, SecurityType};
 use ibapi::market_data::historical::WhatToShow;
+use serde::Serialize;
 use time::OffsetDateTime;
 
+#[derive(Clone)]
 pub struct Resolved {
     pub contract: Contract,
+    /// Instrument metadata sent to the UI.
+    pub info: SymbolInfo,
     /// Short label shown on the chart, e.g. `AAPL` or `ESZ6`.
     pub label: String,
     /// Long description, e.g. `APPLE INC · NASDAQ · USD`.
@@ -25,6 +29,29 @@ pub struct Resolved {
     pub has_volume: bool,
     /// Minimum price increment, used for price formatting.
     pub min_tick: f64,
+}
+
+/// Instrument metadata for the UI (symbol info panel, storage keys, sessions).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolInfo {
+    /// Stable storage key for per-instrument data such as drawings. Futures use the root
+    /// (`/ES:CME`) so drawings survive contract rolls; everything else uses the IB contract id.
+    pub key: String,
+    pub con_id: i32,
+    pub kind: &'static str,
+    pub symbol: String,
+    pub long_name: String,
+    pub exchange: String,
+    pub currency: String,
+    pub time_zone: String,
+    pub trading_hours: Vec<String>,
+    pub liquid_hours: Vec<String>,
+    pub industry: String,
+    pub category: String,
+    pub subcategory: String,
+    pub expiry: String,
+    pub multiplier: String,
 }
 
 fn parse_query(input: &str) -> Result<Contract> {
@@ -123,7 +150,38 @@ pub async fn resolve(client: &Client, input: &str) -> Result<Resolved> {
 
     let has_volume = what_to_show == WhatToShow::Trades && c.security_type != SecurityType::Index;
 
+    let kind = match c.security_type {
+        SecurityType::Stock => "stock",
+        SecurityType::Future => "future",
+        SecurityType::ForexPair => "forex",
+        SecurityType::Index => "index",
+        SecurityType::Crypto => "crypto",
+        _ => "other",
+    };
+    let key = match c.security_type {
+        SecurityType::Future => format!("/{}:{}", c.symbol, c.exchange),
+        _ => c.contract_id.to_string(),
+    };
+    let info = SymbolInfo {
+        key,
+        con_id: c.contract_id,
+        kind,
+        symbol: label.clone(),
+        long_name: d.long_name.clone(),
+        exchange: exchange.to_string(),
+        currency: c.currency.to_string(),
+        time_zone: d.time_zone_id.clone(),
+        trading_hours: d.trading_hours.clone(),
+        liquid_hours: d.liquid_hours.clone(),
+        industry: d.industry.clone(),
+        category: d.category.clone(),
+        subcategory: d.subcategory.clone(),
+        expiry: c.last_trade_date_or_contract_month.clone(),
+        multiplier: c.multiplier.clone(),
+    };
+
     Ok(Resolved {
+        info,
         contract: c,
         label,
         description,
