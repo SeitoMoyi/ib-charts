@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "IB Charts",
+  "mainBinaryName": "ib-charts",
+  "version": "0.2.0",
+  "identifier": "io.github.seitomoyi.ibcharts",
+  "build": {},
+  "app": {
+    "windows": [],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Finance",
+    "shortDescription": "TradingView-style charts for your IB Gateway market data",
+    "longDescription": "Read-only, TradingView-style charts powered by your own Interactive Brokers IB Gateway / TWS market data.",
+    "copyright": "Copyright (c) 2026 SeitoMoyi. MIT License.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}

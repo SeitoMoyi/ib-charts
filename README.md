@@ -4,7 +4,7 @@ TradingView-style charts that run on your own computer and use the market data y
 
 ![screenshot](docs/screenshot.png)
 
-- **Single Rust binary.** It connects to IB Gateway / TWS and serves a web UI on `localhost`.
+- **Desktop app for macOS, Windows and Linux** (Rust + [Tauri](https://tauri.app)), about 10 MB. It can also run as a plain local web server for your browser.
 - **History plus live updates.** It loads past bars, then keeps the current bar updating (IB's `keepUpToDate` historical stream).
 - **Charts:** candles, volume, SMA 20 / SMA 50 / EMA 200, session VWAP and RSI(14).
 - **Timeframes:** 1m, 5m, 15m, 30m, 1h, 4h, D, W, M, with an RTH-only toggle.
@@ -14,9 +14,16 @@ TradingView-style charts that run on your own computer and use the market data y
 
 Charts are drawn with TradingView's open-source [Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (Apache-2.0). It is built into the binary, so the app runs fully offline apart from IB.
 
+## Installing
+
+Download the installer for your OS from [Releases](https://github.com/SeitoMoyi/ib-charts/releases): `.dmg` (macOS), `.msi`/`.exe` (Windows), `.AppImage`/`.deb` (Linux).
+
+The builds aren't code-signed yet, so your OS will warn the first time:
+- **macOS:** right-click the app → **Open**, or run `xattr -cr "/Applications/IB Charts.app"` if it says the app is damaged.
+- **Windows:** SmartScreen → **More info** → **Run anyway**.
+
 ## Requirements
 
-- [Rust](https://rustup.rs) (stable)
 - IB Gateway or TWS running and logged in, with the API enabled:
   **Configure → Settings → API → Settings**
   - ✅ Enable ActiveX and Socket Clients
@@ -25,13 +32,22 @@ Charts are drawn with TradingView's open-source [Lightweight Charts™](https://
   - Trusted IPs: `127.0.0.1`
 - Market data subscriptions for whatever you want to chart. Without one, IB returns error 162/354.
 
-## Run
+## Building from source
+
+Needs [Rust](https://rustup.rs) (stable). On Linux also install the Tauri system libraries:
+`sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
 
 ```sh
-cargo run --release                     # Gateway live on 4001, opens http://127.0.0.1:8088
-cargo run --release -- --ib-port 4002   # paper Gateway
-cargo run --release -- --help           # all options
+cargo run --release                          # desktop app, Gateway live on 4001
+cargo run --release -- --ib-port 4002        # paper Gateway
+cargo run --release -- --browser             # no window: open http://127.0.0.1:8088 in your browser
+cargo run --release -- --help                # all options
+
+cargo install tauri-cli --locked && cargo tauri build   # build the .app/.dmg, .msi or .AppImage/.deb
 ```
+
+Closing the window keeps IB Charts running in the menu bar / system tray (so alerts keep working later).
+Use **Quit** from the tray icon or **Cmd+Q** to exit.
 
 Options can also be set with environment variables: `IB_HOST`, `IB_PORT`, `IB_CLIENT_ID`, `LISTEN`.
 
@@ -40,8 +56,9 @@ Options can also be set with environment variables: `IB_HOST`, `IB_PORT`, `IB_CL
 | `--ib-host` | `127.0.0.1` | Gateway / TWS host |
 | `--ib-port` | `4001` | API port |
 | `--client-id` | `77` | Must differ from other API apps on the same Gateway |
-| `--listen` | `127.0.0.1:8088` | Web UI address |
-| `--no-open` | | Don't open the browser |
+| `--browser` | | Use your web browser instead of the desktop window |
+| `--no-open` | | With `--browser`: don't open the browser automatically |
+| `--listen` | `127.0.0.1:8088` (browser) / random port (desktop) | UI server address |
 | `--data-dir` | per-user app-data dir | Where settings, watchlist, drawings, scripts and layouts are saved |
 
 Your data is saved as plain files you can back up or sync:

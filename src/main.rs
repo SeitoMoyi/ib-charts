@@ -1,11 +1,16 @@
-//! ib-charts: read-only, TradingView-style charts fed by your own IB Gateway / TWS market data.
+//! IB Charts: read-only, TradingView-style charts fed by your own IB Gateway / TWS market data.
 //!
-//! The binary connects to the IB API socket, serves a small web UI (embedded in the binary),
-//! and streams historical + live-updating bars to the browser over a WebSocket.
+//! The app runs a small local server (HTTP + WebSocket) that talks to the IB API and serves
+//! the chart UI. By default the UI is shown in a native desktop window (Tauri); with
+//! `--browser` it is opened in your normal web browser instead.
 //!
 //! This program never places, modifies or cancels orders — it only requests market data.
 
+// Don't open a console window next to the app on Windows release builds.
+#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+
 mod contracts;
+mod desktop;
 mod ib;
 mod server;
 mod store;
@@ -32,13 +37,18 @@ pub struct Args {
     #[arg(long, env = "IB_CLIENT_ID", default_value_t = 77)]
     pub client_id: i32,
 
-    /// Address the web UI listens on. Keep it on 127.0.0.1 unless you know what you're doing.
-    #[arg(long, env = "LISTEN", default_value = "127.0.0.1:8088")]
-    pub listen: String,
-
-    /// Don't open the browser automatically.
+    /// Run without the desktop window and open the UI in your web browser instead.
     #[arg(long)]
+    pub browser: bool,
+
+    /// With --browser: don't open the browser automatically (server only).
+    #[arg(long, requires = "browser")]
     pub no_open: bool,
+
+    /// Address the UI server listens on. Default: 127.0.0.1:8088 with --browser,
+    /// a random free localhost port for the desktop app.
+    #[arg(long, env = "LISTEN")]
+    pub listen: Option<String>,
 
     /// Where watchlists, drawings, scripts and layouts are saved.
     /// Defaults to the platform's per-user app-data directory.
@@ -46,16 +56,41 @@ pub struct Args {
     pub data_dir: Option<std::path::PathBuf>,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,ibapi=warn")))
         .init();
-
     let args = Args::parse();
-    let ib = Arc::new(ib::Ib::new(format!("{}:{}", args.ib_host, args.ib_port), args.client_id));
 
-    // Try to connect up front so problems show immediately; the UI will retry on demand otherwise.
+    // One Tokio runtime shared by the server, the IB client and Tauri.
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    tauri::async_runtime::set(rt.handle().clone());
+
+    let url = rt.block_on(start_server(&args))?;
+
+    if args.browser {
+        if !args.no_open
+            && let Err(e) = opener::open_browser(&url)
+        {
+            tracing::warn!("could not open browser: {e}");
+        }
+        rt.block_on(async {
+            let _ = tokio::signal::ctrl_c().await;
+        });
+        return Ok(());
+    }
+
+    desktop::run(
+        url,
+        desktop::Hooks {
+            on_exit: Box::new(|| tracing::info!("bye")),
+        },
+    )
+}
+
+/// Connects to IB (best effort), binds the UI server and spawns it. Returns the UI URL.
+async fn start_server(args: &Args) -> Result<String> {
+    let ib = Arc::new(ib::Ib::new(format!("{}:{}", args.ib_host, args.ib_port), args.client_id));
     match ib.client().await {
         Ok(c) => tracing::info!(
             "connected to IB at {}:{} (server version {})",
@@ -72,33 +107,26 @@ async fn main() -> Result<()> {
     })?;
     tracing::info!("data directory: {}", store.root().display());
 
-    let listener = tokio::net::TcpListener::bind(&args.listen)
+    let listen = args
+        .listen
+        .clone()
+        .unwrap_or_else(|| if args.browser { "127.0.0.1:8088" } else { "127.0.0.1:0" }.to_string());
+    let listener = tokio::net::TcpListener::bind(&listen)
         .await
-        .with_context(|| format!("cannot listen on {}", args.listen))?;
-    let url = format!("http://{}", args.listen);
+        .with_context(|| format!("cannot listen on {listen}"))?;
+    let addr = listener.local_addr()?;
+    let url = format!("http://{addr}/");
     tracing::info!("chart UI at {url}");
-    if !args.no_open {
-        open_browser(&url);
-    }
 
-    let loopback_only = listener.local_addr()?.ip().is_loopback();
-    let state = server::AppState { ib, store, loopback_only };
-    axum::serve(listener, server::router(state))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
-    Ok(())
-}
-
-fn open_browser(url: &str) {
-    #[cfg(target_os = "macos")]
-    let r = std::process::Command::new("open").arg(url).spawn();
-    #[cfg(target_os = "windows")]
-    let r = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let r = std::process::Command::new("xdg-open").arg(url).spawn();
-    if let Err(e) = r {
-        tracing::debug!("could not open browser: {e}");
-    }
+    let state = server::AppState {
+        ib,
+        store,
+        loopback_only: addr.ip().is_loopback(),
+    };
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(listener, server::router(state)).await {
+            tracing::error!("server stopped: {e}");
+        }
+    });
+    Ok(url)
 }
