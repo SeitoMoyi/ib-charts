@@ -1,0 +1,27 @@
+[package]
+name = "ib-charts"
+version = "0.1.0"
+edition = "2024"
+description = "Read-only, TradingView-style charts powered by your own IB Gateway / TWS market data"
+license = "MIT"
+readme = "README.md"
+keywords = ["interactive-brokers", "trading", "charts", "market-data", "ibkr"]
+categories = ["finance", "visualization"]
+
+[dependencies]
+anyhow = "1.0.105"
+axum = { version = "0.8.9", features = ["ws"] }
+clap = { version = "4.6.10", features = ["derive", "env"] }
+futures = "0.3.34"
+ibapi = "5.8.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+time = "0.3"
+tokio = { version = "1.54.1", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
