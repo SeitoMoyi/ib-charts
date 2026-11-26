@@ -65,6 +65,25 @@ Your data is saved as plain files you can back up or sync:
 macOS `~/Library/Application Support/io.github.ib-charts/`, Linux `~/.local/share/ib-charts/`,
 Windows `%APPDATA%\ib-charts\data\`.
 
+## Starting IB Gateway automatically
+
+Click the **Gateway** button at the left of the toolbar to choose how IB Charts handles Gateway:
+
+| Mode | What happens |
+|---|---|
+| **Log in automatically** | IB Charts starts Gateway and logs in with [IBC](https://github.com/IbcAlpha/IBC), which it downloads for you. You still approve the login in **IBKR Mobile**; IB requires that. |
+| **Open Gateway, I log in** | IB Charts opens the Gateway app and you type your login. |
+| **I start Gateway myself** | IB Charts just connects to a running Gateway or TWS (the default). |
+
+How auto-login handles your password and settings:
+- **Password storage.** The password is stored in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service), never in IB Charts' settings files.
+- **Hand-off to IBC.** At startup IB Charts writes the password into a private IBC config file (readable only by you), because IBC reads credentials from that file. It removes the credentials from the file as soon as the login completes and deletes the file when Gateway stops.
+- **Read-only.** IBC is configured with **Read-Only API** on, so no orders can be placed through the API.
+- **Watchdog.** The Gateway panel shows live status ("Approve on phone", "Connected"…) and a log. If Gateway crashes, IB Charts restarts it.
+- **On quit.** Quitting IB Charts stops the Gateway it started (can be turned off under *Advanced*).
+- **Gateway version.** IBC needs the **offline** (versioned) IB Gateway installer, not the auto-updating one.
+- **IBC renames the Gateway app.** IBC renames `IB Gateway 10.xx.app` to `…-1.app` so Gateway can't be started without it. The manual mode handles either name.
+
 ## Symbol syntax
 
 | Type | Example |
@@ -98,6 +117,8 @@ browser (Lightweight Charts) ⇄ WebSocket ⇄ ib-charts (axum + ibapi) ⇄ IB G
 
 - `src/contracts.rs`: turns what you type into a fully resolved IB contract via `reqContractDetails`.
 - `src/timeframe.rs`: maps each timeframe to a bar size and history length.
+- `src/gateway/`: finds Gateway installs, installs IBC, OS keychain access, and the start/watch/stop supervisor.
+- `src/desktop.rs`: the Tauri window, tray icon and app lifecycle.
 - `src/ib.rs`: shared IB connection that reconnects when needed, plus a contract cache.
 - `src/store.rs` + `src/server/store_api.rs`: file-backed storage for UI data.
 - `src/server/`: HTTP routes, request guards, symbol search, WebSocket bar streaming.

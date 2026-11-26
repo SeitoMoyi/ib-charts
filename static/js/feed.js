@@ -7,11 +7,21 @@ export class Feed {
     this.seq = 0;
     this.retryMs = 1000;
     this.connListeners = new Set();
+    this.globalListeners = new Set();
     this.connect();
   }
 
   onConnection(cb) {
     this.connListeners.add(cb);
+  }
+
+  /** Messages not tied to a subscription (e.g. Gateway status). */
+  onGlobal(cb) {
+    this.globalListeners.add(cb);
+  }
+
+  resubscribeAll() {
+    for (const id of this.subs.keys()) this.send(id);
   }
 
   connect() {
@@ -29,6 +39,7 @@ export class Feed {
     };
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
+      if (m.id === undefined) { this.globalListeners.forEach((cb) => cb(m)); return; }
       const sub = this.subs.get(m.id);
       if (!sub || sub.seq !== m.seq) return; // stale reply
       if (m.type === 'ended') {

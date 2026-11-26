@@ -1,5 +1,6 @@
 //! HTTP + WebSocket server for the chart UI.
 
+mod gateway_api;
 mod search;
 mod store_api;
 mod stream;
@@ -13,6 +14,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
+use crate::gateway::Gateway;
 use crate::ib::Ib;
 use crate::store::Store;
 
@@ -20,6 +22,7 @@ use crate::store::Store;
 pub struct AppState {
     pub ib: Arc<Ib>,
     pub store: Store,
+    pub gateway: Arc<Gateway>,
     /// Only accept requests addressed to localhost (blocks DNS-rebinding attacks).
     pub loopback_only: bool,
 }
@@ -36,6 +39,10 @@ pub fn router(state: AppState) -> Router {
             "/api/store/{ns}/{key}",
             get(store_api::get).put(store_api::put).delete(store_api::delete),
         )
+        .route("/api/gateway", get(gateway_api::get))
+        .route("/api/gateway/settings", axum::routing::put(gateway_api::put_settings))
+        .route("/api/gateway/log", get(gateway_api::log))
+        .route("/api/gateway/{action}", axum::routing::post(gateway_api::action))
         .route("/ws", get(stream::ws_upgrade))
         .fallback(static_file)
         .layer(middleware::from_fn_with_state(state.clone(), guard))

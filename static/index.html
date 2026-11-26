@@ -9,6 +9,7 @@
 </head>
 <body>
   <header id="toolbar">
+    <button id="gw-pill" type="button"><span class="gw-dot"></span><span class="gw-label">Gateway</span></button>
     <div id="symbol-box">
       <input id="symbol" type="text" spellcheck="false" autocomplete="off" placeholder="Symbol" title="AAPL · EUR.USD · /ES · ^SPX · $BTC · 7203:TSEJ:JPY">
       <ul id="suggestions" hidden></ul>
@@ -21,6 +22,7 @@
        title="Charts by TradingView Lightweight Charts™ — Copyright (c) TradingView, Inc.">Charts by TradingView</a>
   </header>
   <main id="charts"></main>
+  <dialog id="gw-dialog"></dialog>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@
 
 mod contracts;
 mod desktop;
+mod gateway;
 mod ib;
 mod server;
 mod store;
@@ -66,7 +67,7 @@ fn main() -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     tauri::async_runtime::set(rt.handle().clone());
 
-    let url = rt.block_on(start_server(&args))?;
+    let (url, gw) = rt.block_on(start_server(&args))?;
 
     if args.browser {
         if !args.no_open
@@ -76,36 +77,32 @@ fn main() -> Result<()> {
         }
         rt.block_on(async {
             let _ = tokio::signal::ctrl_c().await;
+            gw.shutdown().await;
         });
         return Ok(());
     }
 
+    let handle = rt.handle().clone();
     desktop::run(
         url,
         desktop::Hooks {
-            on_exit: Box::new(|| tracing::info!("bye")),
+            // Quitting IB Charts also stops the Gateway it started (if enabled).
+            on_exit: Box::new(move || handle.block_on(gw.shutdown())),
         },
     )
 }
 
-/// Connects to IB (best effort), binds the UI server and spawns it. Returns the UI URL.
-async fn start_server(args: &Args) -> Result<String> {
+/// Starts the Gateway supervisor, binds the UI server and spawns it. Returns the UI URL.
+async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
     let ib = Arc::new(ib::Ib::new(format!("{}:{}", args.ib_host, args.ib_port), args.client_id));
-    match ib.client().await {
-        Ok(c) => tracing::info!(
-            "connected to IB at {}:{} (server version {})",
-            args.ib_host,
-            args.ib_port,
-            c.server_version()
-        ),
-        Err(e) => tracing::warn!("{e:#} — will retry when the chart requests data"),
-    }
 
     let store = store::Store::open(match &args.data_dir {
         Some(d) => d.clone(),
         None => store::Store::default_root()?,
     })?;
     tracing::info!("data directory: {}", store.root().display());
+    let gateway = gateway::Gateway::new(store.clone(), ib.clone(), args.ib_host.clone(), args.ib_port).await;
+    tracing::info!("IB API address: {}", ib.address());
 
     let listen = args
         .listen
@@ -121,6 +118,7 @@ async fn start_server(args: &Args) -> Result<String> {
     let state = server::AppState {
         ib,
         store,
+        gateway: gateway.clone(),
         loopback_only: addr.ip().is_loopback(),
     };
     tokio::spawn(async move {
@@ -128,5 +126,5 @@ async fn start_server(args: &Args) -> Result<String> {
             tracing::error!("server stopped: {e}");
         }
     });
-    Ok(url)
+    Ok((url, gateway))
 }

@@ -98,6 +98,21 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
         }
     });
 
+    // Push Gateway status changes to the UI (no subscription id).
+    let mut gw_status = st.gateway.subscribe();
+    let gw_tx = tx.clone();
+    let gw_task = tokio::spawn(async move {
+        loop {
+            let status = gw_status.borrow_and_update().clone();
+            if gw_tx.send(json!({"type": "gateway", "status": status}).to_string()).await.is_err() {
+                break;
+            }
+            if gw_status.changed().await.is_err() {
+                break;
+            }
+        }
+    });
+
     // Active subscriptions by id. Aborting a task drops its IB subscription,
     // which sends the cancel to the Gateway.
     let mut active: HashMap<String, JoinHandle<()>> = HashMap::new();
@@ -141,6 +156,7 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
     for (_, h) in active {
         h.abort();
     }
+    gw_task.abort();
     writer.abort();
 }
 

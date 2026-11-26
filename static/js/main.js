@@ -3,6 +3,7 @@
 import * as api from './api.js';
 import { ChartPane } from './chart-pane.js';
 import { Feed } from './feed.js';
+import { initGateway } from './gateway.js';
 import { BUILTINS } from './indicators.js';
 import { initSymbolSearch } from './symbol-search.js';
 import { $, el } from './util.js';
@@ -47,4 +48,5 @@ const active = new ChartPane($('charts'), feed, structuredClone(ui), {
   onLoad: (pane) => { document.title = `${pane.data.symbol} · IB Charts`; },
 });
 
+initGateway(feed);
 initSymbolSearch($('symbol'), $('suggestions'), (sym) => active.setSymbol(sym), () => active.state.symbol);

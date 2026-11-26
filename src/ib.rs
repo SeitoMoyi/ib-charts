@@ -14,7 +14,7 @@ use crate::contracts::{self, Resolved};
 const RESOLVE_TTL: Duration = Duration::from_secs(3600);
 
 pub struct Ib {
-    addr: String,
+    addr: std::sync::Mutex<String>,
     client_id: i32,
     client: Mutex<Option<Arc<Client>>>,
     resolved: Mutex<HashMap<String, (Instant, Arc<Resolved>)>>,
@@ -23,11 +23,31 @@ pub struct Ib {
 impl Ib {
     pub fn new(addr: String, client_id: i32) -> Self {
         Self {
-            addr,
+            addr: std::sync::Mutex::new(addr),
             client_id,
             client: Mutex::new(None),
             resolved: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn address(&self) -> String {
+        self.addr.lock().unwrap().clone()
+    }
+
+    /// Points the client at a different Gateway/TWS address; the next request reconnects.
+    pub async fn set_address(&self, addr: String) {
+        if *self.addr.lock().unwrap() == addr {
+            return;
+        }
+        tracing::info!("IB API address is now {addr}");
+        *self.addr.lock().unwrap() = addr;
+        *self.client.lock().await = None;
+        self.resolved.lock().await.clear();
+    }
+
+    /// Drops the current connection so the next request reconnects (e.g. after a Gateway restart).
+    pub async fn reset(&self) {
+        *self.client.lock().await = None;
     }
 
     /// Returns a connected client, connecting (or reconnecting after e.g. the
@@ -41,13 +61,19 @@ impl Ib {
             tracing::warn!("IB connection lost; reconnecting");
         }
         *slot = None;
-        let client = Client::connect(&self.addr, self.client_id).await.with_context(|| {
-            format!(
-                "cannot connect to IB at {} with client id {} — is IB Gateway running, \
+        let addr = self.address();
+        let connect = tokio::time::timeout(Duration::from_secs(15), Client::connect(&addr, self.client_id));
+        let client = connect
+            .await
+            .map_err(|_| anyhow::anyhow!("timed out"))
+            .and_then(|r| r.map_err(Into::into))
+            .with_context(|| {
+                format!(
+                    "cannot connect to IB at {} with client id {} — is IB Gateway running, \
                  API enabled, port correct and client id unused?",
-                self.addr, self.client_id
-            )
-        })?;
+                    addr, self.client_id
+                )
+            })?;
         let client = Arc::new(client);
         *slot = Some(client.clone());
         Ok(client)
