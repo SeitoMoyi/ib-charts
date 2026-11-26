@@ -1,6 +1,7 @@
 // One chart: candles + volume + indicators + legend, bound to one feed subscription.
 
 import * as LWC from '/vendor/lightweight-charts.mjs';
+import { DrawingManager } from './drawings/manager.js';
 import { BUILTINS } from './indicators.js';
 import { el, fmtVol, precisionFor } from './util.js';
 
@@ -53,6 +54,8 @@ export class ChartPane {
     });
     this.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
+    this.drawings = new DrawingManager(this);
+
     this.chart.subscribeCrosshairMove((p) => {
       const d = p.time !== undefined ? p.seriesData.get(this.candles) : null;
       this.hovering = !!d;
@@ -92,6 +95,14 @@ export class ChartPane {
     return this.data.intraday ? t - new Date(t * 1000).getTimezoneOffset() * 60 : t;
   }
 
+  /** Inverse of toChartTime. */
+  fromChartTime(t) {
+    return this.data.intraday ? t + new Date(t * 1000).getTimezoneOffset() * 60 : t;
+  }
+
+  indicatorLabel(id) { return BUILTINS[id]?.label ?? id; }
+  indicatorColor(id) { return BUILTINS[id]?.color ?? '#787b86'; }
+
   onMessage(m) {
     switch (m.type) {
       case 'status': this.status(m.message); break;
@@ -112,6 +123,7 @@ export class ChartPane {
     this.chart.timeScale().applyOptions({ timeVisible: m.intraday });
     this.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, d.bars.length - 150), to: d.bars.length + 8 });
     this.status(`${m.symbol} ${this.state.tf} · live`, 'live');
+    this.drawings.setBars(d.bars, m.info?.key ?? m.symbol);
     this.hooks.onLoad?.(this);
   }
 
@@ -121,6 +133,7 @@ export class ChartPane {
     const last = bars[bars.length - 1];
     if (last && bar.time < last.time) return; // stale
     if (last && bar.time === last.time) bars[bars.length - 1] = bar; else bars.push(bar);
+    this.drawings.onBar(bar);
 
     this.candles.update(bar);
     if (this.data.hasVolume) this.volume.update(volBar(bar));

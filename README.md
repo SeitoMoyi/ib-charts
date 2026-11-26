@@ -10,6 +10,10 @@ TradingView-style charts that run on your own computer and use the market data y
 - **Timeframes:** 1m, 5m, 15m, 30m, 1h, 4h, D, W, M, with an RTH-only toggle.
 - **Markets:** stocks (US and international), forex, futures (picks the front month automatically), indices and crypto.
 - **Watchlist** sidebar with live quotes (last, change, % change; delayed data marked **D**), sections, drag to reorder, ☆ to add the current symbol, and ↑/↓ to step through it. Each symbol uses one IB market-data line, no matter how many windows show it.
+- **Drawing tools** (left toolbar): trend line, ray, extended line, horizontal line and ray, vertical line, rectangle, parallel channel, Fibonacci retracement, measure (price/% change, bar count and time span), and text.
+  - **Editing:** click-click or drag to draw, hold Shift to keep the tool, drag to move or reshape, magnet snapping to OHLC, a floating style bar (colour, width, dash), lock/hide, and undo/redo (Cmd/Ctrl+Z).
+  - **Shortcuts:** Alt+T/H/V/F/R/C/M/X.
+  - **Saving:** drawings are saved per instrument and stay in place across every timeframe. An objects list shows all drawings and indicators.
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.

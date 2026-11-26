@@ -3,6 +3,7 @@
 import * as api from './api.js';
 import { ChartPane } from './chart-pane.js';
 import { Feed } from './feed.js';
+import { initDrawingToolbar, renderObjects } from './drawing-toolbar.js';
 import { initGateway } from './gateway.js';
 import { BUILTINS } from './indicators.js';
 import { initSymbolSearch } from './symbol-search.js';
@@ -61,6 +62,7 @@ $('wl-star').addEventListener('click', () => watchlist.toggle(active.state.symbo
 active = new ChartPane($('charts'), feed, structuredClone(ui), {
   onChange: (pane) => {
     syncToolbar(pane);
+    renderObjects(() => active);
     const { watchlistOpen } = ui;
     Object.assign(ui, structuredClone(pane.state), { watchlistOpen });
     saveUi(ui);
@@ -69,5 +71,10 @@ active = new ChartPane($('charts'), feed, structuredClone(ui), {
   onLoad: (pane) => { document.title = `${pane.data.symbol} · IB Charts`; },
 });
 
+const drawTools = initDrawingToolbar(() => active);
+active.drawings.onChange(() => drawTools.sync());
+drawTools.sync();
 initGateway(feed);
+// Handy for debugging from the devtools console.
+window.__app = { get active() { return active; }, feed, watchlist };
 initSymbolSearch($('symbol'), $('suggestions'), (sym) => active.setSymbol(sym), () => active.state.symbol);
