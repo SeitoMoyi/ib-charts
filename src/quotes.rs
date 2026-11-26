@@ -189,19 +189,13 @@ mod tests {
 
     #[test]
     fn price_falls_back_to_midpoint_then_close() {
-        let q = Quote {
-            bid: Some(1.1),
-            ask: Some(1.3),
-            close: Some(1.0),
-            ..Default::default()
-        };
+        let mut q = Quote::default();
+        (q.bid, q.ask, q.close) = (Some(1.1), Some(1.3), Some(1.0));
         let w = WireQuote::from_quote("EUR.USD", &q);
         assert!((w.price.unwrap() - 1.2).abs() < 1e-9);
         assert!((w.change_pct.unwrap() - 20.0).abs() < 1e-9);
-        let q = Quote {
-            close: Some(50.0),
-            ..Default::default()
-        };
+        let mut q = Quote::default();
+        q.close = Some(50.0);
         assert_eq!(WireQuote::from_quote("X", &q).price, Some(50.0));
     }
 }
