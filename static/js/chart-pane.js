@@ -2,7 +2,7 @@
 
 import * as LWC from '/vendor/lightweight-charts.mjs';
 import { DrawingManager } from './drawings/manager.js';
-import { BUILTINS } from './indicators.js';
+import { StudyHost } from './scripts/studies.js';
 import { el, fmtVol, precisionFor } from './util.js';
 
 const UP = '#26a69a', DOWN = '#ef5350';
@@ -12,16 +12,17 @@ export class ChartPane {
   /**
    * @param {HTMLElement} container
    * @param {import('./feed.js').Feed} feed
-   * @param {{symbol:string, tf:string, rth:boolean, ind:Object<string,boolean>}} state
-   * @param {{onStatus?:Function, onChange?:Function, onLoad?:Function}} hooks
+   * @param {{symbol:string, tf:string, rth:boolean, studies:Array}} state
+   * @param {{onStatus?:Function, onChange?:Function, onLoad?:Function, onStudySettings?:Function}} hooks
    */
   constructor(container, feed, state, hooks = {}) {
     this.id = `pane${nextId++}`;
     this.feed = feed;
-    this.state = { symbol: 'AAPL', tf: '5m', rth: false, ind: {}, ...state };
+    this.state = { symbol: 'AAPL', tf: '5m', rth: false, ...state };
+    this.state.studies = migrateStudies(this.state);
+    delete this.state.ind;
     this.hooks = hooks;
     this.data = { bars: [], intraday: true, hasVolume: true, symbol: '', description: '', info: null, precision: 2 };
-    this.lines = {};
     this.hovering = false;
 
     this.root = el('div', { class: 'pane' });
@@ -55,6 +56,8 @@ export class ChartPane {
     this.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
     this.drawings = new DrawingManager(this);
+    this.studies = new StudyHost(this);
+    this.studies.setConfigs(this.state.studies);
 
     this.chart.subscribeCrosshairMove((p) => {
       const d = p.time !== undefined ? p.seriesData.get(this.candles) : null;
@@ -69,9 +72,9 @@ export class ChartPane {
   setSymbol(symbol) { this.state.symbol = symbol.trim().toUpperCase(); this.subscribe(); }
   setTimeframe(tf) { this.state.tf = tf; this.subscribe(); }
   setRth(rth) { this.state.rth = rth; this.subscribe(); }
-  toggleIndicator(id) {
-    this.state.ind[id] = !this.state.ind[id];
-    this.renderIndicator(id);
+  addStudy(ref, inputs) { return this.studies.add(ref, inputs); }
+  studiesChanged() {
+    this.state.studies = this.studies.configs();
     this.changed();
   }
   destroy() {
@@ -100,8 +103,6 @@ export class ChartPane {
     return this.data.intraday ? t + new Date(t * 1000).getTimezoneOffset() * 60 : t;
   }
 
-  indicatorLabel(id) { return BUILTINS[id]?.label ?? id; }
-  indicatorColor(id) { return BUILTINS[id]?.color ?? '#787b86'; }
 
   onMessage(m) {
     switch (m.type) {
@@ -124,6 +125,7 @@ export class ChartPane {
     this.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, d.bars.length - 150), to: d.bars.length + 8 });
     this.status(`${m.symbol} ${this.state.tf} · live`, 'live');
     this.drawings.setBars(d.bars, m.info?.key ?? m.symbol);
+    this.studies.runAll(true);
     this.hooks.onLoad?.(this);
   }
 
@@ -137,12 +139,7 @@ export class ChartPane {
 
     this.candles.update(bar);
     if (this.data.hasVolume) this.volume.update(volBar(bar));
-    const tail = bars.slice(-400); // indicators only change at the end
-    for (const id of Object.keys(this.lines)) {
-      const def = BUILTINS[id];
-      const pts = def.calc(def.fullHistory ? bars : tail, this.data);
-      if (pts.length) this.lines[id].update(pts[pts.length - 1]);
-    }
+    this.studies.onBar();
     if (!this.hovering) this.updateLegend();
   }
 
@@ -151,28 +148,7 @@ export class ChartPane {
     const b = this.data.bars;
     this.candles.setData(b);
     this.volume.setData(this.data.hasVolume ? b.map(volBar) : []);
-    for (const id of Object.keys(BUILTINS)) this.renderIndicator(id);
     this.updateLegend();
-  }
-
-  renderIndicator(id) {
-    const def = BUILTINS[id];
-    if (!this.state.ind[id]) {
-      if (this.lines[id]) { this.chart.removeSeries(this.lines[id]); delete this.lines[id]; }
-      return;
-    }
-    if (!this.lines[id]) {
-      const s = this.chart.addSeries(LWC.LineSeries, {
-        color: def.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true,
-        crosshairMarkerVisible: false, title: def.label,
-      }, def.pane || 0);
-      for (const price of def.levels || []) {
-        s.createPriceLine({ price, color: '#787b86', lineStyle: LWC.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: false });
-      }
-      if (def.pane) this.chart.panes()[def.pane]?.setHeight(140);
-      this.lines[id] = s;
-    }
-    this.lines[id].setData(def.calc(this.data.bars, this.data));
   }
 
   updateLegend(bar) {
@@ -194,6 +170,21 @@ export class ChartPane {
       ...(hasVolume && bar.volume != null ? [' ', el('span', { class: 'k' }, 'V'), ' ', fmtVol(bar.volume)] : []),
     );
   }
+}
+
+/** Converts the old fixed indicator toggles (`ind: {sma20: true}`) into script studies. */
+function migrateStudies(state) {
+  if (Array.isArray(state.studies)) return state.studies;
+  const map = {
+    sma20: ['builtin:SMA', { Length: 20 }],
+    sma50: ['builtin:SMA', { Length: 50, Color: '#2196f3' }],
+    ema200: ['builtin:EMA', { Length: 200 }],
+    vwap: ['builtin:VWAP', {}],
+    rsi: ['builtin:RSI', {}],
+  };
+  return Object.entries(state.ind || { sma20: true })
+    .filter(([id, on]) => on && map[id])
+    .map(([id], i) => ({ uid: `m${Date.now()}${i}`, ref: map[id][0], inputs: map[id][1], hidden: false }));
 }
 
 function volBar(b) {

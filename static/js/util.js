@@ -24,3 +24,19 @@ export function precisionFor(minTick) {
   const decimals = minTick > 0 ? (minTick.toFixed(10).replace(/0+$/, '').split('.')[1] || '').length : 2;
   return Math.min(8, Math.max(2, decimals));
 }
+
+/** In-app replacement for window.confirm (which desktop webviews may not implement). */
+export function confirmDialog(text, okLabel = 'OK') {
+  return new Promise((resolve) => {
+    const dlg = el('dialog', { class: 'confirm' });
+    const done = (v) => { dlg.close(); dlg.remove(); resolve(v); };
+    dlg.append(el('div', { class: 'gw-form' },
+      el('div', {}, text),
+      el('div', { class: 'gw-actions' },
+        el('button', { type: 'button', onclick: () => done(false) }, 'Cancel'),
+        el('button', { type: 'button', class: 'primary', onclick: () => done(true) }, okLabel))));
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(false); });
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}

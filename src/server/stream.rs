@@ -117,6 +117,23 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
         }
     });
 
+    // Forward app-wide events.
+    let mut events = st.events.subscribe();
+    let ev_tx = tx.clone();
+    let ev_task = tokio::spawn(async move {
+        loop {
+            match events.recv().await {
+                Ok(v) => {
+                    if ev_tx.send(v.to_string()).await.is_err() {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(_) => break,
+            }
+        }
+    });
+
     // Active subscriptions by id. Aborting a task drops its IB subscription,
     // which sends the cancel to the Gateway.
     let mut active: HashMap<String, JoinHandle<()>> = HashMap::new();
@@ -207,6 +224,7 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
         st.quotes.unsubscribe(&sym).await;
     }
     gw_task.abort();
+    ev_task.abort();
     writer.abort();
 }
 

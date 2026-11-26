@@ -70,7 +70,8 @@ impl Ib {
             .with_context(|| {
                 format!(
                     "cannot connect to IB at {} with client id {} — is IB Gateway running, \
-                 API enabled, port correct and client id unused?",
+                 API enabled, port correct and client id unused? (If the connection is closed \
+                 immediately, another program may be using this port: pick a different API port.)",
                     addr, self.client_id
                 )
             })?;

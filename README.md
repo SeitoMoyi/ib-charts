@@ -6,7 +6,10 @@ TradingView-style charts that run on your own computer and use the market data y
 
 - **Desktop app for macOS, Windows and Linux** (Rust + [Tauri](https://tauri.app)), about 10 MB. It can also run as a plain local web server for your browser.
 - **History plus live updates.** It loads past bars, then keeps the current bar updating (IB's `keepUpToDate` historical stream).
-- **Charts:** candles, volume, SMA 20 / SMA 50 / EMA 200, session VWAP and RSI(14).
+- **Charts:** candles and volume.
+- **Indicators as scripts.** Built in: SMA, EMA, Bollinger Bands, VWAP, RSI, MACD, Stochastic, ATR, SuperTrend, EMA Cross, ADX/DMI, OBV and CCI.
+  - **Your own:** write indicators in JavaScript with a Pine-like API (`ta.*`, `input.*`, `plot`, `plotshape`, `alertcondition`…) in the built-in editor, or in any editor with live reload. See [docs/SCRIPTING.md](docs/SCRIPTING.md).
+  - **Safety:** scripts run sandboxed in a Web Worker without network access.
 - **Timeframes:** 1m, 5m, 15m, 30m, 1h, 4h, D, W, M, with an RTH-only toggle.
 - **Markets:** stocks (US and international), forex, futures (picks the front month automatically), indices and crypto.
 - **Watchlist** sidebar with live quotes (last, change, % change; delayed data marked **D**), sections, drag to reorder, ☆ to add the current symbol, and ↑/↓ to step through it. Each symbol uses one IB market-data line, no matter how many windows show it.

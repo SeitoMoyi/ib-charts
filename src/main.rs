@@ -116,11 +116,22 @@ async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
     let url = format!("http://{addr}/");
     tracing::info!("chart UI at {url}");
 
+    let (events, _) = tokio::sync::broadcast::channel(64);
+    let ev = events.clone();
+    match store.watch_scripts(move |name| {
+        let _ = ev.send(serde_json::json!({ "type": "scriptChanged", "name": name }));
+    }) {
+        // The watcher stops when dropped; it lives for the whole run.
+        Ok(w) => std::mem::forget(w),
+        Err(e) => tracing::warn!("not watching the scripts folder: {e}"),
+    }
+
     let state = server::AppState {
         ib: ib.clone(),
         store,
         gateway: gateway.clone(),
         quotes: quotes::QuoteHub::new(ib.clone()),
+        events,
         loopback_only: addr.ip().is_loopback(),
     };
     tokio::spawn(async move {

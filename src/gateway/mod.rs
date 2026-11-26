@@ -277,7 +277,8 @@ impl Gateway {
         loop {
             let s = self.settings.lock().await.clone();
             let port = s.port();
-            let up = TcpStream::connect((self.host.as_str(), port)).await.is_ok();
+            let probe_host = self.host.trim_start_matches('[').trim_end_matches(']');
+            let up = TcpStream::connect((probe_host, port)).await.is_ok();
 
             // Did our IBC/Gateway process exit?
             let mut exited = None;

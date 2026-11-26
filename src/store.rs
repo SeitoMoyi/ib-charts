@@ -132,6 +132,40 @@ fn decode_key(name: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+impl Store {
+    /// Watches the scripts folder and reports changed script names (e.g. a script saved
+    /// from VS Code), so open charts can reload it. Keep the returned watcher alive.
+    pub fn watch_scripts(&self, on_change: impl Fn(String) + Send + 'static) -> Result<notify::RecommendedWatcher> {
+        use notify::Watcher;
+        let dir = self.root.join("scripts");
+        std::fs::create_dir_all(&dir)?;
+        let last = std::sync::Mutex::new(std::collections::HashMap::<String, std::time::Instant>::new());
+        let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            let Ok(event) = res else { return };
+            if event.kind.is_access() {
+                return;
+            }
+            for path in event.paths {
+                if path.extension().is_none_or(|e| e != "js") {
+                    continue;
+                }
+                let Some(name) = path.file_stem().and_then(|s| decode_key(&s.to_string_lossy())) else {
+                    continue;
+                };
+                // Editors often write a file several times in a row; report once.
+                let mut last = last.lock().unwrap();
+                if last.get(&name).is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(300)) {
+                    continue;
+                }
+                last.insert(name.clone(), std::time::Instant::now());
+                on_change(name);
+            }
+        })?;
+        watcher.watch(&dir, notify::RecursiveMode::NonRecursive)?;
+        Ok(watcher)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

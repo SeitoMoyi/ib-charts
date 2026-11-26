@@ -24,6 +24,8 @@ pub struct AppState {
     pub store: Store,
     pub gateway: Arc<Gateway>,
     pub quotes: Arc<crate::quotes::QuoteHub>,
+    /// App-wide events pushed to every open window (e.g. a script file changed).
+    pub events: tokio::sync::broadcast::Sender<serde_json::Value>,
     /// Only accept requests addressed to localhost (blocks DNS-rebinding attacks).
     pub loopback_only: bool,
 }
@@ -51,8 +53,12 @@ pub fn router(state: AppState) -> Router {
 }
 
 async fn static_file(uri: Uri) -> Response {
-    let path = uri.path().trim_start_matches('/');
+    let decoded = percent_decode(uri.path());
+    let path = decoded.trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
+    if path.split('/').any(|seg| seg == "..") {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
     match Assets::get(path) {
         Some(file) => {
             let mime = if path.ends_with(".mjs") || path.ends_with(".js") {
@@ -68,6 +74,25 @@ async fn static_file(uri: Uri) -> Response {
         }
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// Decodes `%XX` escapes in a URL path (e.g. `Bollinger%20Bands.js`).
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && let Some(v) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(v);
+            i += 3;
+            continue;
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Rejects requests that don't come from our own page:
@@ -108,6 +133,16 @@ fn same_origin(headers: &HeaderMap) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decodes_paths() {
+        assert_eq!(
+            percent_decode("/scripts/builtin/Bollinger%20Bands.js"),
+            "/scripts/builtin/Bollinger Bands.js"
+        );
+        assert_eq!(percent_decode("/a%2"), "/a%2");
+        assert_eq!(percent_decode("/%E6%97%A5"), "/日");
+    }
 
     #[test]
     fn loopback_hosts() {

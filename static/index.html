@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IB Charts</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/codemirror/codemirror.css">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -16,7 +17,10 @@
     </div>
     <button id="wl-star" type="button" title="Add to watchlist">☆</button>
     <div class="group" id="timeframes"></div>
-    <div class="group" id="indicators"></div>
+    <div class="group">
+      <button id="ind-btn" title="Add an indicator">ƒx Indicators</button>
+      <button id="script-btn" title="Write your own indicator">&lt;/&gt; Script editor</button>
+    </div>
     <div class="group"><button id="rth" title="Regular trading hours only">RTH</button></div>
     <div id="status"><span id="dot"></span><span id="status-text">Connecting…</span></div>
     <button id="wl-toggle" type="button" title="Show / hide watchlist">☰ Watchlist</button>
@@ -26,10 +30,20 @@
   <div id="workspace">
     <nav id="draw-tools"></nav>
     <div id="objects" hidden></div>
-    <main id="charts"></main>
+    <div id="center">
+      <main id="charts"></main>
+      <section id="editor" hidden></section>
+    </div>
     <aside id="watchlist"></aside>
   </div>
   <dialog id="gw-dialog"></dialog>
+  <dialog id="ind-dialog"></dialog>
+  <dialog id="study-dialog"></dialog>
+  <script src="/vendor/codemirror/codemirror.js"></script>
+  <script src="/vendor/codemirror/javascript.js"></script>
+  <script src="/vendor/codemirror/matchbrackets.js"></script>
+  <script src="/vendor/codemirror/closebrackets.js"></script>
+  <script src="/vendor/codemirror/comment.js"></script>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>

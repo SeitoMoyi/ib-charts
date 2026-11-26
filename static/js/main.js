@@ -5,14 +5,14 @@ import { ChartPane } from './chart-pane.js';
 import { Feed } from './feed.js';
 import { initDrawingToolbar, renderObjects } from './drawing-toolbar.js';
 import { initGateway } from './gateway.js';
-import { BUILTINS } from './indicators.js';
+import { initScriptsUi, onScriptFileChanged, openStudySettings } from './scripts/scripts-ui.js';
 import { initSymbolSearch } from './symbol-search.js';
 import { $, el } from './util.js';
 import { Watchlist } from './watchlist.js';
 
 const TIMEFRAMES = [['1m', '1m'], ['5m', '5m'], ['15m', '15m'], ['30m', '30m'], ['1h', '1h'], ['4h', '4h'], ['1D', 'D'], ['1W', 'W'], ['1M', 'M']];
 
-const defaults = { symbol: 'AAPL', tf: '5m', rth: false, ind: { sma20: true }, watchlistOpen: true };
+const defaults = { symbol: 'AAPL', tf: '5m', rth: false, watchlistOpen: true };
 const ui = { ...defaults, ...(await api.load('settings', 'ui', {})) };
 const saveUi = api.debouncedSaver('settings', 'ui');
 
@@ -28,7 +28,6 @@ function setStatus(text, kind = '') {
 
 // ---------- toolbar ----------
 $('timeframes').append(...TIMEFRAMES.map(([tf, label]) => el('button', { 'data-tf': tf, onclick: () => active.setTimeframe(tf) }, label)));
-$('indicators').append(...Object.entries(BUILTINS).map(([id, def]) => el('button', { 'data-ind': id, onclick: () => active.toggleIndicator(id) }, def.label)));
 $('rth').addEventListener('click', () => active.setRth(!active.state.rth));
 
 function syncToolbar(pane) {
@@ -40,7 +39,6 @@ function syncToolbar(pane) {
   watchlist?.highlight();
   if (document.activeElement !== $('symbol')) $('symbol').value = s.symbol;
   document.querySelectorAll('[data-tf]').forEach((b) => b.classList.toggle('active', b.dataset.tf === s.tf));
-  document.querySelectorAll('[data-ind]').forEach((b) => b.classList.toggle('active', !!s.ind[b.dataset.ind]));
   $('rth').classList.toggle('active', s.rth);
 }
 
@@ -69,12 +67,16 @@ active = new ChartPane($('charts'), feed, structuredClone(ui), {
   },
   onStatus: (_pane, text, kind) => setStatus(text, kind),
   onLoad: (pane) => { document.title = `${pane.data.symbol} · IB Charts`; },
+  onStudySettings: (host, study) => openStudySettings(host, study),
 });
 
 const drawTools = initDrawingToolbar(() => active);
 active.drawings.onChange(() => drawTools.sync());
 drawTools.sync();
 initGateway(feed);
+initScriptsUi(() => active);
+active.onStudiesRun = () => renderObjects(() => active);
+feed.onGlobal((m) => { if (m.type === 'scriptChanged') onScriptFileChanged(m.name); });
 // Handy for debugging from the devtools console.
 window.__app = { get active() { return active; }, feed, watchlist };
 initSymbolSearch($('symbol'), $('suggestions'), (sym) => active.setSymbol(sym), () => active.state.symbol);

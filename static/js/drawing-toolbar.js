@@ -101,10 +101,12 @@ export function renderObjects(getActive) {
     iconBtn(d.hidden ? '◌' : '●', d.hidden ? 'Show' : 'Hide', (e) => { e.stopPropagation(); m.patch(d.id, (x) => { x.hidden = !x.hidden; }); }, d.hidden),
     iconBtn(d.locked ? '🔒' : '🔓', d.locked ? 'Unlock' : 'Lock', (e) => { e.stopPropagation(); m.patch(d.id, (x) => { x.locked = !x.locked; }); }, d.locked),
     iconBtn('×', 'Remove', (e) => { e.stopPropagation(); m.remove(d.id); })));
-  const inds = Object.entries(pane.state.ind).filter(([, on]) => on).map(([id]) => el('div', { class: 'obj-row' },
-    el('span', { class: 'obj-dot', style: `background:${pane.indicatorColor(id)}` }),
-    el('span', { class: 'obj-name' }, pane.indicatorLabel(id)),
-    iconBtn('×', 'Remove', () => pane.toggleIndicator(id))));
+  const inds = pane.studies.studies.map((s) => el('div', { class: 'obj-row' },
+    el('span', { class: 'obj-dot', style: `background:${s.result?.plots[0]?.color || '#787b86'}` }),
+    el('span', { class: 'obj-name' }, s.title),
+    iconBtn(s.cfg.hidden ? '◌' : '●', s.cfg.hidden ? 'Show' : 'Hide', () => pane.studies.update(s.cfg.uid, { hidden: !s.cfg.hidden }), s.cfg.hidden),
+    iconBtn('⚙', 'Settings', () => pane.hooks.onStudySettings?.(pane.studies, s)),
+    iconBtn('×', 'Remove', () => pane.studies.remove(s.cfg.uid))));
   box.replaceChildren(
     el('div', { class: 'obj-head' }, el('b', {}, `Objects — ${pane.data.symbol}`), el('button', { class: 'icon', onclick: () => { box.hidden = true; } }, '✕')),
     el('div', { class: 'obj-section' }, 'Indicators'), ...(inds.length ? inds : [el('div', { class: 'obj-empty' }, 'None')]),
