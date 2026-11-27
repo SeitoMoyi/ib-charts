@@ -35,6 +35,7 @@ export class ChartPane {
     this.hooks = hooks;
     this.data = { bars: [], intraday: true, hasVolume: true, symbol: '', description: '', info: null, precision: 2, sessions: [] };
     this.compareSeries = new Map(); // symbol -> { series, last, shift, error }
+    this.extraPrimitives = [];
     this.hovering = false;
 
     this.root = el('div', { class: 'pane' });
@@ -133,6 +134,19 @@ export class ChartPane {
     this.chart.panes().forEach((pane) => pane.priceScale('right').applyOptions({ autoScale: true }));
   }
 
+  /** Attaches an add-on layer (e.g. GEX) to the main series; kept across chart-type changes. */
+  attachExtra(prim) {
+    if (this.extraPrimitives.includes(prim)) return;
+    this.extraPrimitives.push(prim);
+    this.candles.attachPrimitive(prim);
+  }
+
+  detachExtra(prim) {
+    if (!this.extraPrimitives.includes(prim)) return;
+    this.extraPrimitives = this.extraPrimitives.filter((p) => p !== prim);
+    this.candles.detachPrimitive(prim);
+  }
+
   /** Your average cost as a price line (positions panel). */
   setPositionLine(pos) {
     if (this.posLine) this.candles.removePriceLine(this.posLine);
@@ -184,7 +198,7 @@ export class ChartPane {
     this.state.chartType = type;
     const old = this.candles;
     this.candles = this.createMainSeries(type);
-    for (const prim of [this.sessionLayer, this.infoLayer, this.profileLayer, this.drawings.layer]) {
+    for (const prim of [this.sessionLayer, this.infoLayer, this.profileLayer, this.drawings.layer, ...this.extraPrimitives]) {
       old.detachPrimitive(prim);
       this.candles.attachPrimitive(prim);
     }

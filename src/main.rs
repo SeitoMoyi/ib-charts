@@ -13,6 +13,7 @@ mod contracts;
 mod demo;
 mod desktop;
 mod gateway;
+mod gex;
 mod ib;
 mod quotes;
 mod server;
@@ -136,6 +137,7 @@ async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
         store,
         gateway: gateway.clone(),
         quotes: quotes::QuoteHub::new(ib.clone(), args.demo),
+        gex: gex::GexJobs::new(ib.clone(), args.demo),
         demo: args.demo,
         events,
         loopback_only: addr.ip().is_loopback(),

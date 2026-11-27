@@ -239,6 +239,63 @@ pub fn earnings() -> Value {
     json!([d(-180), d(-90), d(-2), d(88)])
 }
 
+/// Synthetic option chain for `--demo` GEX: weekly expiries, Black–Scholes gamma, and
+/// open interest that clusters near the money and on round strikes.
+pub fn gex(p: &crate::gex::GexParams) -> crate::gex::GexResult {
+    use crate::gex::{GexResult, OptionRow};
+    let sym = p.symbol.to_uppercase();
+    let spot = base_price(&sym);
+    let step = if spot > 500.0 {
+        5.0
+    } else if spot > 100.0 {
+        1.0
+    } else {
+        0.5
+    };
+    let mut rng = Rng::new(hash(&sym) ^ 0x6e7);
+    let today = chrono::Utc::now().date_naive();
+    let expiries: Vec<chrono::NaiveDate> = (0..p.max_expiries as i64)
+        .map(|i| today + chrono::Duration::days(2 + 7 * i))
+        .filter(|d| (*d - today).num_days() <= p.max_days.max(2))
+        .collect();
+    let mut rows = Vec::new();
+    for exp in &expiries {
+        let t = ((*exp - today).num_days().max(1) as f64) / 365.0;
+        let mut k = ((spot * (1.0 - p.range)) / step).ceil() * step;
+        while k <= spot * (1.0 + p.range) {
+            for call in [true, false] {
+                let iv = 0.22 + 0.25 * ((k / spot).ln()).powi(2) * 10.0 + if call { 0.0 } else { 0.03 };
+                let d1 = ((spot / k).ln() + 0.5 * iv * iv * t) / (iv * t.sqrt());
+                let gamma = (-0.5 * d1 * d1).exp() / (2.0 * std::f64::consts::PI).sqrt() / (spot * iv * t.sqrt());
+                let moneyness = (k / spot - if call { 1.03 } else { 0.97 }).abs();
+                let round = if (k / (step * 10.0)).fract().abs() < 1e-9 { 3.0 } else { 1.0 };
+                let oi = (2.0e4 * (-moneyness * 25.0).exp() * round * (0.4 + rng.next())).round();
+                rows.push(OptionRow {
+                    expiry: exp.format("%Y%m%d").to_string(),
+                    strike: k,
+                    call,
+                    gamma: Some(gamma),
+                    iv: Some(iv),
+                    open_interest: Some(oi),
+                });
+            }
+            k += step;
+        }
+    }
+    let n = rows.len();
+    GexResult {
+        symbol: sym,
+        spot,
+        multiplier: 100.0,
+        expiries: expiries.iter().map(|d| d.format("%Y%m%d").to_string()).collect(),
+        rows,
+        data_type: "Demo".into(),
+        requested: n,
+        complete: n,
+        fetched_at: chrono::Utc::now().timestamp(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

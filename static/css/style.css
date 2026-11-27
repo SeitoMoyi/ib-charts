@@ -469,3 +469,24 @@ dialog.wide { width: min(820px, 94vw); }
 .wl-row, .wl-section { touch-action: none; user-select: none; }
 .wl-drop { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; z-index: 2; }
 body.wl-dragging, body.wl-dragging * { cursor: grabbing !important; }
+
+/* ---------- GEX ---------- */
+.gex-ctl { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 8px; align-items: center; }
+.gex-ctl select, .gex-sym { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.gex-sym { width: 74px; text-transform: uppercase; font-weight: 600; }
+.gex-ctl .check, .gex-exp .check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.gex-progress { padding: 4px 10px 10px; }
+.gex-progress .bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.gex-progress .bar i { display: block; height: 100%; background: var(--accent); transition: width .5s; }
+.gex-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; padding: 4px 10px 10px; }
+.gex-stat .muted { font-size: 11px; }
+.gex-stat > div:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.gex-exp { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0 10px 8px; font-size: 12px; }
+.gex-view { display: flex; gap: 4px; padding: 0 10px 6px; }
+.gex-view button { border: 1px solid var(--border); padding: 3px 8px; font-size: 12px; }
+.gex-view button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.gex-chartbox { position: relative; padding: 0 6px; }
+.gex-canvas, .gex-curve { display: block; width: 100%; }
+.gex-curve { padding: 0 4px; box-sizing: border-box; }
+.gex-tip { position: absolute; left: 60px; z-index: 3; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-size: 12px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.small { font-size: 11px; }

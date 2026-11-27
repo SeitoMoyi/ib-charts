@@ -38,6 +38,11 @@ TradingView-style charts that run on your own computer and use the market data y
   - **News:** headlines and articles.
   - **Earnings:** markers on the chart (needs Wall Street Horizon data).
   - **Symbol info:** contract details, trading sessions and earnings dates.
+- **Gamma exposure (GEX)** for stocks, ETFs and indices, computed from the IB option chain (each option's model gamma, implied volatility and open interest).
+  - **Panel:** net or calls/puts GEX by strike, total GEX, the zero-gamma (flip) level, call and put walls, and a GEX-vs-price curve. Choose the expirations and strike range.
+  - **On the chart:** GEX bars at their strikes and the key levels.
+  - **Requirements:** IB's US options data (OPRA). One calculation streams a few hundred options and takes about 20–60 s.
+  - **Assumption:** dealers are long calls and short puts (the usual GEX convention).
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.

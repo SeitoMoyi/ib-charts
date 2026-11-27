@@ -6,6 +6,7 @@ import { CHART_TYPES } from './chart-pane.js';
 import { initDrawingToolbar, renderObjects } from './drawing-toolbar.js';
 import { Feed } from './feed.js';
 import { initGateway } from './gateway.js';
+import { initGex } from './gex.js';
 import { initIbPanels } from './ibinfo.js';
 import { LAYOUTS, Layout } from './layout.js';
 import { initScriptsUi, onScriptFileChanged, openStudySettings } from './scripts/scripts-ui.js';
@@ -58,8 +59,9 @@ const showTab = (tab) => {
   ui.sidebarTab = tab;
   if (tab === 'datawin') renderDataWindow(active());
   ibPanels?.onTab(tab);
+  if (tab === 'gex') gex?.onTab();
 };
-let ibPanels;
+let ibPanels, gex;
 document.querySelectorAll('.sb-tabs button').forEach((b) => b.addEventListener('click', () => { showTab(b.dataset.tab); saveUi(ui); }));
 showTab(ui.sidebarTab || 'watchlist');
 $('wl-star').addEventListener('click', () => watchlist.toggle(active().state.symbol));
@@ -222,7 +224,7 @@ let drawTools, replay;
 layout = new Layout($('charts'), feed, ui.layout, {
   onStatus: (_p, text, kind) => setStatus(text, kind),
   onLoad: (p) => { document.title = `${p.data.symbol} · IB Charts`; },
-  onAnyLoad: (p) => ibPanels?.onLoad(p),
+  onAnyLoad: (p) => { ibPanels?.onLoad(p); gex?.applyOverlay(); },
   onStudySettings: (host, study) => openStudySettings(host, study),
   onDrawingAlert: (d) => openAlertDialog(alerts, { drawing: d }),
   onTimeZoneMenu: (anchor) => tzMenu(anchor),
@@ -241,7 +243,7 @@ layout = new Layout($('charts'), feed, ui.layout, {
     const st = document.getElementById('status-text');
     if (st && p.data.symbol) setStatus(`${p.data.symbol} ${p.state.tf} · live`, 'live');
   },
-  onActiveChange: () => { syncToolbar(); renderObjects(active); replay?.render(); ibPanels?.onActivate(); },
+  onActiveChange: () => { syncToolbar(); renderObjects(active); replay?.render(); ibPanels?.onActivate(); gex?.onSymbol(); },
   onAnyChange: (p) => p.setAlertLevels(alerts.levelsFor(p.state.symbol)),
   onChange: (l) => {
     ui.layout = l.serialize();
@@ -251,6 +253,8 @@ layout = new Layout($('charts'), feed, ui.layout, {
 });
 
 ibPanels = initIbPanels(feed, active, () => layout.panes);
+gex = initGex(active, () => layout.panes);
+if (ui.sidebarTab === 'gex') gex.onTab();
 ibPanels.start();
 layout.panes.forEach((p) => p.data.bars.length && ibPanels.onLoad(p));
 drawTools = initDrawingToolbar(active);

@@ -27,6 +27,7 @@ pub struct AppState {
     pub quotes: Arc<crate::quotes::QuoteHub>,
     /// App-wide events pushed to every open window (e.g. a script file changed).
     pub events: tokio::sync::broadcast::Sender<serde_json::Value>,
+    pub gex: Arc<crate::gex::GexJobs>,
     /// `--demo`: synthetic data instead of IB.
     pub demo: bool,
     /// Only accept requests addressed to localhost (blocks DNS-rebinding attacks).
@@ -55,6 +56,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/news", get(ibinfo::news))
         .route("/api/news/article", get(ibinfo::news_article))
         .route("/api/earnings", get(ibinfo::earnings))
+        .route("/api/gex", axum::routing::post(gex_start))
+        .route("/api/gex/{id}", get(gex_status))
         .route("/api/notify", axum::routing::post(notify))
         .route("/api/screenshot", axum::routing::post(screenshot))
         .route("/ws", get(stream::ws_upgrade))
@@ -62,6 +65,30 @@ pub fn router(state: AppState) -> Router {
         .layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
+}
+
+#[derive(serde::Deserialize)]
+struct GexStart {
+    #[serde(flatten)]
+    params: crate::gex::GexParams,
+    #[serde(default)]
+    refresh: bool,
+}
+
+/// Starts (or reuses) a GEX data job; poll `/api/gex/{id}` for progress and the result.
+async fn gex_start(State(st): State<AppState>, axum::Json(req): axum::Json<GexStart>) -> Response {
+    if req.params.symbol.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, "symbol missing").into_response();
+    }
+    let id = st.gex.start(req.params, req.refresh).await;
+    axum::Json(serde_json::json!({ "id": id })).into_response()
+}
+
+async fn gex_status(State(st): State<AppState>, axum::extract::Path(id): axum::extract::Path<String>) -> Response {
+    match st.gex.status(&id).await {
+        Some(s) => axum::Json(s).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 #[derive(serde::Deserialize)]
