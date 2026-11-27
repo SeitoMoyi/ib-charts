@@ -50,10 +50,12 @@ na(x)  nz(x, v)  color.rgba("#hex", alpha)  Math.*</pre>
 They're saved as <code>.js</code> files in your data folder (<i>scripts/</i>) — edit them in any editor and the chart updates when you save.</p>`;
 
 let getActive = () => null;
+let getPanes = () => [];
 let editor = null; // { cm, name, ref, dirty }
 
-export function initScriptsUi(activeGetter) {
+export function initScriptsUi(activeGetter, panesGetter = () => [activeGetter()]) {
   getActive = activeGetter;
+  getPanes = panesGetter;
   $('ind-btn').addEventListener('click', openPicker);
   $('script-btn').addEventListener('click', () => openEditor(null));
 }
@@ -226,7 +228,7 @@ async function saveScript(addToChart = false) {
   editor.dirty = false;
   forgetCode(`user:${name}`);
   const pane = getActive();
-  await pane?.studies.reloadScript(`user:${name}`);
+  for (const p of getPanes()) await p?.studies.reloadScript(`user:${name}`);
   if (addToChart) await pane?.addStudy(`user:${name}`);
   // Report the first error from a study using this script, if any.
   const err = pane?.studies.studies.find((s) => s.cfg.ref === `user:${name}` && s.error)?.error;
@@ -265,7 +267,7 @@ function clearErrorMark() {
 /** A script file changed on disk (e.g. saved from VS Code). */
 export async function onScriptFileChanged(name) {
   forgetCode(`user:${name}`);
-  await getActive()?.studies.reloadScript(`user:${name}`);
+  for (const p of getPanes()) await p?.studies.reloadScript(`user:${name}`);
   if (editor && editor.saved && editor.name === name && !editor.dirty) {
     const code = await loadCode(`user:${name}`, { fresh: true });
     if (code !== editor.cm.getValue()) {

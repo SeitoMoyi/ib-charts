@@ -159,7 +159,7 @@ export class StudyHost {
       this.hoverIndex = p.logical != null ? Math.round(p.logical) : null;
       this.renderLegends();
     });
-    setInterval(() => this.positionLegends(), 500); // pane separators can be dragged
+    this.legendTimer = setInterval(() => this.positionLegends(), 500); // pane separators can be dragged
   }
 
   /** Replaces the study list (from saved state). */
@@ -167,6 +167,13 @@ export class StudyHost {
     for (const s of this.studies) s.dispose(this.chart);
     this.studies = configs.map((c) => new Study(this, { ...c }));
     await this.runAll(true);
+  }
+
+  /** The chart's main series was replaced (chart type change). */
+  reattachMarkers() {
+    this.candleMarkers.detach();
+    this.candleMarkers = LWC.createSeriesMarkers(this.pane.candles, []);
+    this.rebuild();
   }
 
   configs() {
@@ -217,9 +224,11 @@ export class StudyHost {
 
   /** Runs every study on the current bars. `force` rebuilds series even if unchanged. */
   async runAll(force = false) {
+    if (this.disposed) return;
     if (!this.pane.data.bars.length) { this.rebuild(); return; }
     const bars = this.barsForScripts();
     const done = await Promise.all(this.studies.map((s) => (s.cfg.hidden ? true : s.run(bars))));
+    if (this.disposed) return; // chart was closed while scripts ran
     if (done.includes(false) && !force) return;
     const sigs = this.studies.map((s) => s.sig()).join('|');
     if (force || sigs !== this.lastSigs) {
@@ -240,6 +249,7 @@ export class StudyHost {
   // ---------- rendering ----------
 
   rebuild() {
+    if (this.disposed) return;
     const chart = this.chart;
     for (const s of this.studies) s.destroySeries(chart);
     for (let i = chart.panes().length - 1; i >= 1; i--) {
@@ -292,7 +302,15 @@ export class StudyHost {
     if (!s.overlay && s.series[0]) s.markers = LWC.createSeriesMarkers(s.series[0], []);
   }
 
+  dispose() {
+    this.disposed = true;
+    clearTimeout(this.rerunTimer);
+    clearInterval(this.legendTimer);
+    for (const s of this.studies) s.runner.terminate();
+  }
+
   refreshData() {
+    if (this.disposed) return;
     const bars = this.pane.data.bars;
     const overlayMarkers = [];
     for (const s of this.studies) {

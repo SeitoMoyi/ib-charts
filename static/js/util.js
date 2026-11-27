@@ -40,3 +40,21 @@ export function confirmDialog(text, okLabel = 'OK') {
     dlg.showModal();
   });
 }
+
+/** Opens a dropdown menu under `anchor`. Returns a function that closes it. */
+export function openMenu(anchor, build) {
+  document.querySelector('.menu')?.remove();
+  const menu = el('div', { class: 'menu' });
+  const close = () => { menu.remove(); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', esc, true); };
+  const outside = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) close(); };
+  const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  menu.append(...build(close));
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect();
+  const left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 8);
+  if (r.bottom + menu.offsetHeight > window.innerHeight - 8) menu.style.bottom = `${window.innerHeight - r.top + 4}px`;
+  else menu.style.top = `${r.bottom + 4}px`;
+  menu.style.left = `${Math.max(8, left)}px`;
+  setTimeout(() => { document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', esc, true); }, 0);
+  return close;
+}

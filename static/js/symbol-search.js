@@ -66,6 +66,7 @@ export function initSymbolSearch(input, list, onChoose, current) {
     const t = document.activeElement;
     if (t === input || t?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (/^[a-zA-Z0-9\/^$]$/.test(e.key)) { input.focus(); input.value = ''; }
+    // Digits open the timeframe box instead (handled in main.js), like TradingView.
+    if (/^[a-zA-Z\/^$]$/.test(e.key)) { input.focus(); input.value = ''; }
   });
 }

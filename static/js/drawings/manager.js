@@ -53,6 +53,16 @@ export class DrawingManager {
     this.defaults = { color: COLORS[0], width: 2, dash: 0 };
 
     this.layer = new DrawingLayer(this);
+    // Another chart showing the same instrument saved its drawings: take them over.
+    this.onShared = (e) => {
+      const { key, drawings, source } = e.detail;
+      if (source === this || key !== this.key) return;
+      this.drawings = structuredClone(drawings);
+      if (!this.drawings.some((d) => d.id === this.selected)) this.selected = null;
+      this.update();
+      this.emit();
+    };
+    window.addEventListener('ibc-drawings', this.onShared);
     this.series.attachPrimitive(this.layer);
     this.buildStyleBar();
     this.bindPointer();
@@ -77,10 +87,13 @@ export class DrawingManager {
 
   onBar(bar) { this.mapper.update(bar.time); }
 
+  dispose() { window.removeEventListener('ibc-drawings', this.onShared); clearTimeout(this.saveTimer); }
+
   save() {
     if (!this.key) return;
     clearTimeout(this.saveTimer);
     const key = this.key, drawings = this.drawings;
+    window.dispatchEvent(new CustomEvent('ibc-drawings', { detail: { key, drawings, source: this } }));
     this.saveTimer = setTimeout(() => {
       const clean = JSON.parse(JSON.stringify(drawings, (k, v) => (k.startsWith('_') ? undefined : v)));
       api.save('drawings', key, { v: 1, drawings: clean }).catch((e) => console.error(e));
@@ -263,10 +276,7 @@ export class DrawingManager {
   }
 
   formatTime(t) {
-    const dt = new Date(t * 1000);
-    if (!this.pane.data.intraday) return dt.toISOString().slice(0, 10);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    return this.pane.formatTime(this.pane.toChartTime(t));
   }
 
   // ---------- hit testing ----------
