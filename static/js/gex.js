@@ -33,9 +33,13 @@ function yearsTo(expiry, now = Date.now() / 1000) {
  * @param {object} data   server result { spot, multiplier, rows: [{ expiry, strike, call, gamma, iv, openInterest }] }
  * @param {Set<string>} expiries  expirations to include
  */
-export function computeGex(data, expiries) {
+export function computeGex(data, expiries, weight = 'oi') {
   const { spot, multiplier: mult } = data;
-  const rows = data.rows.filter((r) => expiries.has(r.expiry) && r.openInterest > 0 && (r.gamma != null || r.iv != null));
+  // Contracts per option: open interest, or today's volume when IB sends no open interest.
+  const w = (r) => (weight === 'volume' ? r.volume : r.openInterest) || 0;
+  const rows = data.rows
+    .filter((r) => expiries.has(r.expiry) && w(r) > 0 && (r.gamma != null || r.iv != null))
+    .map((r) => ({ ...r, openInterest: w(r) }));
   const T = new Map([...expiries].map((e) => [e, yearsTo(e)]));
   const unit = mult * spot * spot * 0.01;
   const byStrike = new Map();
@@ -150,7 +154,7 @@ class GexLayer {
  */
 export function initGex(getActive, getPanes) {
   const st = {
-    symbol: '', follow: true, maxExpiries: 4, maxDays: 45, range: 0.12, view: 'net', overlay: true,
+    symbol: '', follow: true, maxExpiries: 4, maxDays: 45, range: 0.12, maxStrikes: 50, view: 'net', overlay: true, weight: 'auto',
     job: null, status: null, data: null, gex: null, include: new Set(), timer: null,
   };
   const layers = new Map(); // pane -> GexLayer
@@ -160,12 +164,14 @@ export function initGex(getActive, getPanes) {
     const symbol = (st.symbol || getActive()?.state.symbol || '').toUpperCase();
     if (!symbol) return;
     st.symbol = symbol;
+    st.runningFor = symbol;
     st.status = { state: 'running', message: 'Starting…', done: 0, total: 0 };
+    st.startedAt = Date.now();
     render();
     try {
       const r = await fetch('/api/gex', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, maxExpiries: st.maxExpiries, maxDays: st.maxDays, range: st.range, refresh }),
+        body: JSON.stringify({ symbol, maxExpiries: st.maxExpiries, maxDays: st.maxDays, range: st.range, maxStrikes: st.maxStrikes, refresh }),
       });
       if (!r.ok) throw new Error(await r.text());
       st.job = (await r.json()).id;
@@ -193,14 +199,20 @@ export function initGex(getActive, getPanes) {
     render();
   }
 
+  /** Open interest unless IB sent none (then today's volume), or what the user picked. */
+  function weightUsed() {
+    if (st.weight !== 'auto') return st.weight;
+    return st.data?.rows.some((r) => r.openInterest > 0) ? 'oi' : 'volume';
+  }
+
   function recompute() {
-    st.gex = st.data ? computeGex(st.data, st.include) : null;
+    st.gex = st.data ? computeGex(st.data, st.include, weightUsed()) : null;
     applyOverlay();
   }
 
   function applyOverlay() {
     for (const pane of getPanes()) {
-      const want = st.overlay && st.gex && st.data && pane.state.symbol.toUpperCase() === st.data.symbol.toUpperCase();
+      const want = st.overlay && st.gex && st.data && pane.state.symbol.toUpperCase() === (st.data.input || st.data.symbol).toUpperCase();
       let layer = layers.get(pane);
       if (want) {
         if (!layer) { layer = new GexLayer(); layers.set(pane, layer); }
@@ -239,16 +251,22 @@ export function initGex(getActive, getPanes) {
         sel([[1, '1 expiry'], [2, '2 expiries'], [4, '4 expiries'], [8, '8 expiries']], st.maxExpiries, (e) => { st.maxExpiries = +e.target.value; run(); }),
         sel([[7, '≤ 7 days'], [14, '≤ 14 days'], [45, '≤ 45 days'], [90, '≤ 90 days']], st.maxDays, (e) => { st.maxDays = +e.target.value; run(); }),
         sel([[0.05, '±5%'], [0.08, '±8%'], [0.12, '±12%'], [0.2, '±20%']], st.range, (e) => { st.range = +e.target.value; run(); }),
+        sel([[30, '30 strikes'], [50, '50 strikes'], [100, '100 strikes']], st.maxStrikes, (e) => { st.maxStrikes = +e.target.value; run(); }),
         el('label', { class: 'muted check' }, el('input', { type: 'checkbox', checked: st.follow, onchange: (e) => { st.follow = e.target.checked; if (st.follow) { st.symbol = ''; run(); } } }), 'Follow chart'),
         el('label', { class: 'muted check' }, el('input', { type: 'checkbox', checked: st.overlay, onchange: (e) => { st.overlay = e.target.checked; applyOverlay(); } }), 'Show on chart')),
       s?.state === 'running' ? el('div', { class: 'gex-progress' },
-        el('div', { class: 'muted' }, s.total ? `Fetching options ${s.done}/${s.total}…` : s.message),
+        el('div', { class: 'muted' }, progressText(s, st.startedAt)),
         el('div', { class: 'bar' }, el('i', { style: `width:${s.total ? (100 * s.done) / s.total : 5}%` }))) : null,
       s?.state === 'error' ? el('div', { class: 'obj-empty err' }, s.message) : null,
       stats,
       d ? el('div', { class: 'gex-exp' }, ...d.expiries.map((e) => el('label', { class: 'check' },
         el('input', { type: 'checkbox', checked: st.include.has(e), onchange: (ev) => { ev.target.checked ? st.include.add(e) : st.include.delete(e); recompute(); render(); } }),
         `${e.slice(4, 6)}/${e.slice(6, 8)}`))) : null,
+      d ? el('div', { class: 'gex-view' }, el('span', { class: 'muted' }, 'Weight'),
+        ...[['oi', 'Open interest'], ['volume', "Today's volume"]].map(([v, l]) =>
+          el('button', { class: weightUsed() === v ? 'on' : '', onclick: () => { st.weight = v; recompute(); render(); } }, l))) : null,
+      d && st.weight === 'auto' && weightUsed() === 'volume' ? el('div', { class: 'gex-delayed' },
+        'IB sent no open interest for these options (it needs a real-time options data subscription for some products, e.g. SPX), so GEX is weighted by today\'s volume instead.') : null,
       g ? el('div', { class: 'gex-view' }, ...[['net', 'Net'], ['split', 'Calls / puts']].map(([v, l]) =>
         el('button', { class: st.view === v ? 'on' : '', onclick: () => { st.view = v; render(); } }, l))) : null,
       g ? el('div', { class: 'gex-chartbox' }, canvas, tip) : null,
@@ -258,7 +276,7 @@ export function initGex(getActive, getPanes) {
         ' Option data is delayed (no real-time options subscription) — levels reflect prices ~15 min ago.') : null,
       d && /frozen/i.test(d.dataType) && !/delayed/i.test(d.dataType) ? el('div', { class: 'gex-delayed' }, el('span', { class: 'data-badge frozen' }, 'Closed'), ' Market closed — last values.') : null,
       d ? el('div', { class: 'muted pad small' },
-        `${d.symbol} · ${g?.options ?? 0} options with data (of ${d.requested}) · ${d.dataType || 'data'} · ${new Date(d.fetchedAt * 1000).toLocaleTimeString()}. `,
+        `${d.symbol} · ${g?.options ?? 0} options with data (of ${d.requested}) · weighted by ${weightUsed() === 'oi' ? 'open interest' : "today's volume"} · ${d.dataType || 'data'} · ${new Date(d.fetchedAt * 1000).toLocaleTimeString()}. `,
         'Assumes dealers are long calls and short puts.') : null,
       !d && !s ? el('div', { class: 'obj-empty' }, 'Needs IB US options data (OPRA). Fetching takes ~20–60 s.', el('br'), el('button', { class: 'small', onclick: () => run() }, 'Calculate GEX')) : null);
 
@@ -268,7 +286,9 @@ export function initGex(getActive, getPanes) {
   return {
     onTab() {
       if (st.follow) st.symbol = getActive()?.state.symbol || st.symbol;
-      if (!st.data || st.data.symbol !== st.symbol) { if (st.status?.state !== 'running') run(); } else render();
+      if (!st.data || (st.data.input || st.data.symbol) !== st.symbol || st.runningFor !== st.symbol) {
+        if (st.runningFor !== st.symbol) run(); else render();
+      } else render();
     },
     /** Active chart changed symbol. */
     onSymbol() {
@@ -280,6 +300,13 @@ export function initGex(getActive, getPanes) {
     applyOverlay,
     render,
   };
+}
+
+function progressText(s, startedAt) {
+  const secs = Math.round((Date.now() - (startedAt || Date.now())) / 1000);
+  if (!s.total) return `${s.message} ${secs ? `(${secs}s)` : ''}`;
+  const left = s.done > 10 ? Math.round((secs / s.done) * (s.total - s.done)) : null;
+  return `Fetching options ${s.done}/${s.total} · ${secs}s${left != null ? ` · about ${left}s left` : ''}`;
 }
 
 function stat(label, value, cls = '', title = '') {
@@ -353,8 +380,8 @@ function drawProfile(canvas, tip, g, view) {
     tip.hidden = false;
     tip.style.top = `${e.offsetY + 12}px`;
     tip.replaceChildren(el('b', {}, `Strike ${s.strike}`),
-      el('div', { class: 'up' }, `Calls ${fmtMoney(s.call)} · OI ${Math.round(s.callOi).toLocaleString()}`),
-      el('div', { class: 'down' }, `Puts ${fmtMoney(s.put)} · OI ${Math.round(s.putOi).toLocaleString()}`),
+      el('div', { class: 'up' }, `Calls ${fmtMoney(s.call)} · ${Math.round(s.callOi).toLocaleString()} contracts`),
+      el('div', { class: 'down' }, `Puts ${fmtMoney(s.put)} · ${Math.round(s.putOi).toLocaleString()} contracts`),
       el('div', {}, `Net ${fmtMoney(s.net)}`));
   };
   canvas.onmouseleave = () => { tip.hidden = true; };

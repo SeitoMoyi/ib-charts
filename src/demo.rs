@@ -278,6 +278,7 @@ pub fn gex(p: &crate::gex::GexParams) -> crate::gex::GexResult {
                     gamma: Some(gamma),
                     iv: Some(iv),
                     open_interest: Some(oi),
+                    volume: Some((oi * 0.3).round()),
                 });
             }
             k += step;
@@ -285,6 +286,7 @@ pub fn gex(p: &crate::gex::GexParams) -> crate::gex::GexResult {
     }
     let n = rows.len();
     GexResult {
+        input: sym.clone(),
         symbol: sym,
         spot,
         multiplier: 100.0,

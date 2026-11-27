@@ -22,13 +22,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::ib::Ib;
+use chrono::Datelike;
 
 /// Options requested at the same time (leaves lines for charts and the watchlist).
-const CONCURRENT: usize = 40;
+const CONCURRENT: usize = 60;
 /// One new request per this interval: request + cancel stay under IB's 50 msg/s.
-const START_EVERY: Duration = Duration::from_millis(50);
+const START_EVERY: Duration = Duration::from_millis(45);
 /// How long to wait for an option's gamma and open interest.
-const PER_OPTION: Duration = Duration::from_secs(8);
+const PER_OPTION: Duration = Duration::from_secs(6);
 const CACHE_FOR: Duration = Duration::from_secs(300);
 const MAX_OPTIONS: usize = 1200;
 
@@ -40,8 +41,10 @@ pub struct GexParams {
     pub max_expiries: usize,
     /// …and only those expiring within this many days.
     pub max_days: i64,
-    /// Strikes within ±range of the spot price (0.12 = ±12%).
+    /// Strikes within ±range of the spot price (0.12 = ±12%)…
     pub range: f64,
+    /// …but at most this many per expiry, nearest to spot.
+    pub max_strikes: usize,
 }
 
 impl Default for GexParams {
@@ -51,6 +54,7 @@ impl Default for GexParams {
             max_expiries: 4,
             max_days: 45,
             range: 0.12,
+            max_strikes: 50,
         }
     }
 }
@@ -64,12 +68,16 @@ pub struct OptionRow {
     pub gamma: Option<f64>,
     pub iv: Option<f64>,
     pub open_interest: Option<f64>,
+    /// Today's volume (fallback weight when IB sends no open interest).
+    pub volume: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GexResult {
     pub symbol: String,
+    /// The symbol as requested (e.g. `^SPX`), for matching charts.
+    pub input: String,
     pub spot: f64,
     pub multiplier: f64,
     pub expiries: Vec<String>,
@@ -110,11 +118,12 @@ impl GexJobs {
 
     fn key(p: &GexParams) -> String {
         format!(
-            "{}|{}|{}|{:.3}",
+            "{}|{}|{}|{:.3}|{}",
             p.symbol.trim().to_uppercase(),
             p.max_expiries,
             p.max_days,
-            p.range
+            p.range,
+            p.max_strikes
         )
     }
 
@@ -124,6 +133,7 @@ impl GexJobs {
         p.max_expiries = p.max_expiries.clamp(1, 12);
         p.max_days = p.max_days.clamp(0, 400);
         p.range = p.range.clamp(0.01, 0.5);
+        p.max_strikes = p.max_strikes.clamp(10, 200);
         let key = Self::key(&p);
         let mut jobs = self.jobs.lock().await;
         jobs.retain(|_, (at, _)| at.elapsed() < CACHE_FOR * 4);
@@ -197,6 +207,16 @@ impl GexJobs {
             chains.push(c.map_err(|e| anyhow!("option chain: {e}"))?);
         }
         drop(sub);
+        for c in &chains {
+            tracing::debug!(
+                "chain {} class {} mult {} {} expiries {} strikes",
+                c.exchange,
+                c.trading_class,
+                c.multiplier,
+                c.expirations.len(),
+                c.strikes.len()
+            );
+        }
         // SMART routing for stocks/ETFs; index options (e.g. SPX/SPXW) list on CBOE.
         let preferred = if chains.iter().any(|c| c.exchange == "SMART") {
             "SMART"
@@ -208,62 +228,72 @@ impl GexJobs {
             bail!("no options found for {}", p.symbol);
         }
 
-        // Nearest expirations, then strikes around spot.
+        // Expiry dates: the nearest few, plus the next standard monthly (third Friday),
+        // which usually holds most of the open interest.
         let today = chrono::Utc::now().date_naive().format("%Y%m%d").to_string();
         let horizon = (chrono::Utc::now() + chrono::Duration::days(p.max_days))
             .format("%Y%m%d")
             .to_string();
-        let mut expiries: Vec<(String, String)> = chains
+        let mut dates: Vec<String> = chains
             .iter()
-            .flat_map(|c| c.expirations.iter().map(move |e| (e.clone(), c.trading_class.clone())))
-            .filter(|(e, _)| *e >= today && *e <= horizon)
+            .flat_map(|c| c.expirations.iter().cloned())
+            .filter(|e| *e >= today && *e <= horizon)
             .collect();
-        expiries.sort();
-        expiries.dedup_by(|a, b| a.0 == b.0); // one trading class per date (SPXW wins dailies)
-        expiries.truncate(p.max_expiries);
-        if expiries.is_empty() {
+        dates.sort();
+        dates.dedup();
+        let monthly = dates.iter().find(|d| is_third_friday(d)).cloned();
+        dates.truncate(p.max_expiries);
+        if let Some(m) = monthly
+            && !dates.contains(&m)
+        {
+            dates.push(m);
+        }
+        if dates.is_empty() {
             bail!("no expirations within {} days", p.max_days);
         }
         let multiplier: f64 = chains[0].multiplier.parse().unwrap_or(100.0);
         let (lo, hi) = (spot * (1.0 - p.range), spot * (1.0 + p.range));
 
+        // Every trading class listing a chosen date (e.g. both SPX and SPXW on monthly dates),
+        // with at most `max_strikes` strikes nearest the spot price.
         let mut contracts = Vec::new();
-        for (exp, class) in &expiries {
-            let strikes: Vec<f64> = chains
-                .iter()
-                .filter(|c| &c.trading_class == class)
-                .flat_map(|c| c.strikes.iter().copied())
-                .filter(|k| *k >= lo && *k <= hi)
-                .collect();
-            for k in strikes {
-                for call in [true, false] {
-                    contracts.push((
-                        exp.clone(),
-                        k,
-                        call,
-                        Contract {
-                            symbol: und.contract.symbol.clone(),
-                            security_type: SecurityType::Option,
-                            last_trade_date_or_contract_month: exp.clone(),
-                            strike: k,
-                            right: Some(if call { OptionRight::Call } else { OptionRight::Put }),
-                            exchange: preferred.into(),
-                            currency: und.contract.currency.clone(),
-                            multiplier: chains[0].multiplier.clone(),
-                            trading_class: class.clone(),
-                            ..Default::default()
-                        },
-                    ));
+        for date in &dates {
+            for chain in chains.iter().filter(|c| c.expirations.contains(date)) {
+                let mut strikes: Vec<f64> = chain.strikes.iter().copied().filter(|k| *k >= lo && *k <= hi).collect();
+                strikes.sort_by(|a, b| (a - spot).abs().total_cmp(&(b - spot).abs()));
+                strikes.truncate(p.max_strikes);
+                for k in strikes {
+                    for call in [true, false] {
+                        contracts.push((
+                            date.clone(),
+                            k,
+                            call,
+                            Contract {
+                                symbol: und.contract.symbol.clone(),
+                                security_type: SecurityType::Option,
+                                last_trade_date_or_contract_month: date.clone(),
+                                strike: k,
+                                right: Some(if call { OptionRight::Call } else { OptionRight::Put }),
+                                exchange: preferred.into(),
+                                currency: und.contract.currency.clone(),
+                                multiplier: chain.multiplier.clone(),
+                                trading_class: chain.trading_class.clone(),
+                                ..Default::default()
+                            },
+                        ));
+                    }
                 }
             }
         }
-        contracts.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
-        contracts.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1 && a.2 == b.2);
+        contracts.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then(a.1.total_cmp(&b.1))
+                .then(a.3.trading_class.cmp(&b.3.trading_class))
+        });
+        contracts.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1 && a.2 == b.2 && a.3.trading_class == b.3.trading_class);
+        let expiries: Vec<String> = dates;
         if contracts.len() > MAX_OPTIONS {
-            bail!(
-                "{} options is too many — narrow the strike range or use fewer expirations",
-                contracts.len()
-            );
+            bail!("{} options is too many — use fewer strikes or expirations", contracts.len());
         }
         let total = contracts.len();
         {
@@ -308,9 +338,10 @@ impl GexJobs {
             .unwrap_or_default();
         Ok(GexResult {
             symbol: und.label.clone(),
+            input: p.symbol.clone(),
             spot,
             multiplier,
-            expiries: expiries.into_iter().map(|(e, _)| e).collect(),
+            expiries,
             rows,
             data_type,
             requested: total,
@@ -345,6 +376,12 @@ async fn spot_price(client: &ibapi::Client, contract: &Contract) -> Result<f64> 
         .ok_or_else(|| anyhow!("no price for the underlying (market data subscription?)"))
 }
 
+/// Standard monthly expiry: the third Friday (day 15–21) of the month.
+fn is_third_friday(yyyymmdd: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(yyyymmdd, "%Y%m%d")
+        .is_ok_and(|d| d.weekday() == chrono::Weekday::Fri && (15..=21).contains(&chrono::Datelike::day(&d)))
+}
+
 /// Streams one option until both gamma and open interest arrive (or time runs out).
 async fn fetch_option(
     client: &ibapi::Client,
@@ -363,7 +400,18 @@ async fn fetch_option(
     // Generic tick 101 = open interest.
     let mut sub = client.market_data(contract).generic_ticks(&["101"]).subscribe().await.ok()?;
     let deadline = Instant::now() + PER_OPTION;
+    let mut grace: Option<Instant> = None;
     while let Ok(Some(item)) = tokio::time::timeout(deadline.saturating_duration_since(Instant::now()), sub.next()).await {
+        if let Ok(SubscriptionItem::Data(TickTypes::Size(s))) = &item {
+            tracing::debug!(
+                "{} {} {}: {:?} = {}",
+                row.expiry,
+                row.strike,
+                if call { "C" } else { "P" },
+                s.tick_type,
+                s.size
+            );
+        }
         match item {
             Ok(SubscriptionItem::Data(TickTypes::OptionComputation(c)))
                 if matches!(c.field, TickType::ModelOption | TickType::DelayedModelOption) =>
@@ -371,13 +419,17 @@ async fn fetch_option(
                 row.gamma = c.gamma.filter(|g| g.is_finite() && *g >= 0.0).or(row.gamma);
                 row.iv = c.implied_volatility.filter(|v| v.is_finite() && *v > 0.0).or(row.iv);
             }
+            // IB sends both the call- and the put-open-interest tick for every option; only the
+            // one matching this option's right carries its number (the other is 0).
             Ok(SubscriptionItem::Data(TickTypes::Size(s)))
-                if matches!(
-                    s.tick_type,
-                    TickType::OptionCallOpenInterest | TickType::OptionPutOpenInterest | TickType::OpenInterest
-                ) =>
+                if (call && s.tick_type == TickType::OptionCallOpenInterest)
+                    || (!call && s.tick_type == TickType::OptionPutOpenInterest)
+                    || s.tick_type == TickType::OpenInterest =>
             {
                 row.open_interest = Some(s.size);
+            }
+            Ok(SubscriptionItem::Data(TickTypes::Size(s))) if matches!(s.tick_type, TickType::Volume | TickType::DelayedVolume) => {
+                row.volume = Some(s.size);
             }
             Ok(SubscriptionItem::Data(TickTypes::MarketDataType(t))) => {
                 *data_types.lock().unwrap().entry(format!("{t:?}")).or_default() += 1;
@@ -385,10 +437,31 @@ async fn fetch_option(
             Err(_) => return None, // e.g. no such strike for this expiry
             _ => {}
         }
+        // Done once we have gamma and open interest — but a 0 open interest (IB sends that,
+        // e.g. for SPX options without a real-time options subscription) is worth waiting a
+        // little longer for the day's volume, which the UI can use instead.
         if row.gamma.is_some() && row.open_interest.is_some() {
+            if row.open_interest.is_some_and(|oi| oi > 0.0) || row.volume.is_some() {
+                break;
+            }
+            grace.get_or_insert_with(|| Instant::now() + Duration::from_millis(1500));
+        }
+        if grace.is_some_and(|g| Instant::now() >= g) {
             break;
         }
     }
     // Dropping `sub` cancels the market-data request.
     Some(row)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn third_fridays() {
+        assert!(is_third_friday("20261218")); // Dec 2026
+        assert!(is_third_friday("20270115"));
+        assert!(!is_third_friday("20261211") && !is_third_friday("20261225") && !is_third_friday("20261217"));
+    }
 }

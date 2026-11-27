@@ -41,7 +41,9 @@ TradingView-style charts that run on your own computer and use the market data y
 - **Gamma exposure (GEX)** for stocks, ETFs and indices, computed from the IB option chain (each option's model gamma, implied volatility and open interest).
   - **Panel:** net or calls/puts GEX by strike, total GEX, the zero-gamma (flip) level, call and put walls, and a GEX-vs-price curve. Choose the expirations and strike range.
   - **On the chart:** GEX bars at their strikes and the key levels.
-  - **Requirements:** IB's US options data (OPRA). One calculation streams a few hundred options and takes about 20–60 s.
+  - **Expirations:** the nearest few plus the next monthly, with up to 50 strikes each nearest the price.
+  - **Requirements:** IB's US options data (OPRA). One calculation streams a few hundred options and takes about 30–40 s.
+  - **Fallback:** when IB sends no open interest (e.g. SPX options without a real-time options subscription), GEX is weighted by today's volume instead, and the panel says so.
   - **Assumption:** dealers are long calls and short puts (the usual GEX convention).
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Delayed-data badges.** Charts and the watchlist show **D** when IB is sending delayed data (no real-time subscription for that market), **Closed** for frozen last values, and **No live data** when there's no subscription at all. IB's explanation is in the tooltip. GEX flags delayed option data the same way.
