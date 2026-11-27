@@ -1,6 +1,6 @@
 [package]
 name = "ib-charts"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Read-only, TradingView-style charts powered by your own IB Gateway / TWS market data"
 license = "MIT"
