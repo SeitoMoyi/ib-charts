@@ -8,6 +8,7 @@ import { initGateway } from './gateway.js';
 import { initScriptsUi, onScriptFileChanged, openStudySettings } from './scripts/scripts-ui.js';
 import { initSymbolSearch } from './symbol-search.js';
 import { $, el } from './util.js';
+import { AlertEngine, initAlertsUi, openAlertDialog } from './alerts.js';
 import { Watchlist } from './watchlist.js';
 
 const TIMEFRAMES = [['1m', '1m'], ['5m', '5m'], ['15m', '15m'], ['30m', '30m'], ['1h', '1h'], ['4h', '4h'], ['1D', 'D'], ['1W', 'W'], ['1M', 'M']];
@@ -48,35 +49,57 @@ const watchlist = new Watchlist(feed, { onPick: (sym) => active.setSymbol(sym), 
 watchlist.onChange = () => syncToolbar(active);
 await watchlist.load();
 const setWatchlistOpen = (open) => {
-  $('watchlist').hidden = !open;
+  $('sidebar').hidden = !open;
   $('wl-toggle').classList.toggle('active', open);
   ui.watchlistOpen = open;
 };
 setWatchlistOpen(ui.watchlistOpen);
-$('wl-toggle').addEventListener('click', () => { setWatchlistOpen($('watchlist').hidden); saveUi(ui); });
+$('wl-toggle').addEventListener('click', () => { setWatchlistOpen($('sidebar').hidden); saveUi(ui); });
+const showTab = (tab) => {
+  document.querySelectorAll('.sb-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.sb-pane').forEach((p) => { p.hidden = p.id !== tab; });
+  ui.sidebarTab = tab;
+};
+document.querySelectorAll('.sb-tabs button').forEach((b) => b.addEventListener('click', () => { showTab(b.dataset.tab); saveUi(ui); }));
+showTab(ui.sidebarTab || 'watchlist');
 $('wl-star').addEventListener('click', () => watchlist.toggle(active.state.symbol));
+
+// ---------- alerts ----------
+const alerts = new AlertEngine(feed, () => active);
+await alerts.load();
+initAlertsUi(alerts);
+alerts.onChange(() => {
+  active?.setAlertLevels(alerts.levelsFor(active.state.symbol));
+  const n = alerts.alerts.filter((a) => a.active).length;
+  $('alert-count').textContent = n ? `(${n})` : '';
+});
+$('alert-btn').addEventListener('click', () => openAlertDialog(alerts, {}));
 
 // ---------- chart ----------
 active = new ChartPane($('charts'), feed, structuredClone(ui), {
   onChange: (pane) => {
     syncToolbar(pane);
     renderObjects(() => active);
-    const { watchlistOpen } = ui;
-    Object.assign(ui, structuredClone(pane.state), { watchlistOpen });
+    const { watchlistOpen, sidebarTab } = ui;
+    Object.assign(ui, structuredClone(pane.state), { watchlistOpen, sidebarTab });
+    if (alerts) pane.setAlertLevels(alerts.levelsFor(pane.state.symbol));
     saveUi(ui);
   },
   onStatus: (_pane, text, kind) => setStatus(text, kind),
   onLoad: (pane) => { document.title = `${pane.data.symbol} · IB Charts`; },
   onStudySettings: (host, study) => openStudySettings(host, study),
+  onDrawingAlert: (d) => openAlertDialog(alerts, { drawing: d }),
 });
 
 const drawTools = initDrawingToolbar(() => active);
-active.drawings.onChange(() => drawTools.sync());
+active.drawings.onChange((m) => { drawTools.sync(); alerts.syncDrawings(m.key, m.drawings); });
 drawTools.sync();
 initGateway(feed);
 initScriptsUi(() => active);
 active.onStudiesRun = () => renderObjects(() => active);
 feed.onGlobal((m) => { if (m.type === 'scriptChanged') onScriptFileChanged(m.name); });
 // Handy for debugging from the devtools console.
-window.__app = { get active() { return active; }, feed, watchlist };
+window.__app = { get active() { return active; }, feed, watchlist, alerts };
+active.setAlertLevels(alerts.levelsFor(active.state.symbol));
+alerts.listeners.forEach((cb) => cb(alerts));
 initSymbolSearch($('symbol'), $('suggestions'), (sym) => active.setSymbol(sym), () => active.state.symbol);

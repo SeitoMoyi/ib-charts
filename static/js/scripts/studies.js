@@ -46,7 +46,7 @@ export async function listScripts() {
 
 // ---------- worker runner ----------
 
-class Runner {
+export class Runner {
   constructor() { this.spawn(); }
 
   spawn() {

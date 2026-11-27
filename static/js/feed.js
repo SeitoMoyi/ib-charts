@@ -9,7 +9,7 @@ export class Feed {
     this.connListeners = new Set();
     this.globalListeners = new Set();
     this.lastGlobal = new Map(); // latest global message per type, replayed to late listeners
-    this.quoteSymbols = [];
+    this.quoteOwners = new Map(); // owner -> symbols (watchlist, alerts…)
     this.connect();
   }
 
@@ -27,14 +27,15 @@ export class Feed {
     for (const id of this.subs.keys()) this.send(id);
   }
 
-  /** Sets the symbols to stream live quotes for (replaces the previous set). */
-  setQuotes(symbols) {
-    this.quoteSymbols = [...new Set(symbols)];
+  /** Sets the symbols `owner` wants live quotes for; the server gets the union of all owners. */
+  setQuotes(symbols, owner = 'watchlist') {
+    this.quoteOwners.set(owner, symbols);
     this.sendQuotes();
   }
 
   sendQuotes() {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'quotes', symbols: this.quoteSymbols }));
+    const all = [...new Set([...this.quoteOwners.values()].flat().map((s) => s.toUpperCase()))];
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'quotes', symbols: all }));
   }
 
   connect() {

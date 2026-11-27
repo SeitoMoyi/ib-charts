@@ -17,6 +17,12 @@ TradingView-style charts that run on your own computer and use the market data y
   - **Editing:** click-click or drag to draw, hold Shift to keep the tool, drag to move or reshape, magnet snapping to OHLC, a floating style bar (colour, width, dash), lock/hide, and undo/redo (Cmd/Ctrl+Z).
   - **Shortcuts:** Alt+T/H/V/F/R/C/M/X.
   - **Saving:** drawings are saved per instrument and stay in place across every timeframe. An objects list shows all drawings and indicators.
+- **Alerts** on a price level, a drawn line (horizontal, trend or ray) or a script's `alertcondition`.
+  - **How often:** only once, once per bar, or every time.
+  - **How you're told:** native desktop notifications, an in-app toast and sound, and an alert log.
+  - **On the chart:** price alerts show as dashed ⏰ lines.
+  - **Shortcut:** Alt+A creates an alert.
+  - **When closed:** alerts keep running while the window is closed to the tray.
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.

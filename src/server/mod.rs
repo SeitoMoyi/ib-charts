@@ -46,10 +46,28 @@ pub fn router(state: AppState) -> Router {
         .route("/api/gateway/settings", axum::routing::put(gateway_api::put_settings))
         .route("/api/gateway/log", get(gateway_api::log))
         .route("/api/gateway/{action}", axum::routing::post(gateway_api::action))
+        .route("/api/notify", axum::routing::post(notify))
         .route("/ws", get(stream::ws_upgrade))
         .fallback(static_file)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
+}
+
+#[derive(serde::Deserialize)]
+struct Notify {
+    title: String,
+    body: String,
+}
+
+/// Native desktop notification (alerts). 501 in browser mode: the page then uses web notifications.
+async fn notify(axum::Json(n): axum::Json<Notify>) -> Response {
+    let title: String = n.title.chars().take(120).collect();
+    let body: String = n.body.chars().take(500).collect();
+    if crate::desktop::notify(&title, &body) {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        StatusCode::NOT_IMPLEMENTED.into_response()
+    }
 }
 
 async fn static_file(uri: Uri) -> Response {

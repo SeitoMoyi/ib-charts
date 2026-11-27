@@ -12,6 +12,22 @@ use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder,
 
 const MAIN: &str = "main";
 
+/// Set once the desktop app is running (absent in --browser mode).
+static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+
+/// Shows a native notification. Returns false outside the desktop app.
+pub fn notify(title: &str, body: &str) -> bool {
+    use tauri_plugin_notification::NotificationExt;
+    let Some(app) = APP.get() else { return false };
+    match app.notification().builder().title(title).body(body).show() {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::warn!("notification failed: {e}");
+            false
+        }
+    }
+}
+
 /// Hooks the rest of the app can attach to the desktop lifecycle.
 pub struct Hooks {
     /// Runs once when the app is about to exit (e.g. to stop IB Gateway).
@@ -23,7 +39,9 @@ pub fn run(url: String, hooks: Hooks) -> Result<()> {
         // A second launch just focuses the running app.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
+            let _ = APP.set(app.handle().clone());
             build_main_window(app.handle(), &url)?;
             build_tray(app.handle(), &url)?;
             Ok(())

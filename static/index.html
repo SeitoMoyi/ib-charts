@@ -16,6 +16,7 @@
       <ul id="suggestions" hidden></ul>
     </div>
     <button id="wl-star" type="button" title="Add to watchlist">☆</button>
+    <button id="alert-btn" type="button" title="Create alert (Alt+A)">⏰</button>
     <div class="group" id="timeframes"></div>
     <div class="group">
       <button id="ind-btn" title="Add an indicator">ƒx Indicators</button>
@@ -23,7 +24,7 @@
     </div>
     <div class="group"><button id="rth" title="Regular trading hours only">RTH</button></div>
     <div id="status"><span id="dot"></span><span id="status-text">Connecting…</span></div>
-    <button id="wl-toggle" type="button" title="Show / hide watchlist">☰ Watchlist</button>
+    <button id="wl-toggle" type="button" title="Show / hide the side panel">☰ Panel</button>
     <a id="attribution" href="https://www.tradingview.com/" target="_blank" rel="noopener"
        title="Charts by TradingView Lightweight Charts™ — Copyright (c) TradingView, Inc.">Charts by TradingView</a>
   </header>
@@ -34,11 +35,19 @@
       <main id="charts"></main>
       <section id="editor" hidden></section>
     </div>
-    <aside id="watchlist"></aside>
+    <aside id="sidebar">
+      <div class="sb-tabs">
+        <button data-tab="watchlist" class="active">Watchlist</button>
+        <button data-tab="alerts">Alerts <span id="alert-count"></span></button>
+      </div>
+      <div id="watchlist" class="sb-pane"></div>
+      <div id="alerts" class="sb-pane" hidden></div>
+    </aside>
   </div>
   <dialog id="gw-dialog"></dialog>
   <dialog id="ind-dialog"></dialog>
   <dialog id="study-dialog"></dialog>
+  <dialog id="alert-dialog"></dialog>
   <script src="/vendor/codemirror/codemirror.js"></script>
   <script src="/vendor/codemirror/javascript.js"></script>
   <script src="/vendor/codemirror/matchbrackets.js"></script>

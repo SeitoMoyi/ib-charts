@@ -52,7 +52,7 @@ export class Watchlist {
     // ↑/↓ steps through the list when you're not typing somewhere.
     document.addEventListener('keydown', (e) => {
       const t = document.activeElement;
-      if (this.root.hidden || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName) || t?.isContentEditable) return;
+      if (this.root.hidden || this.root.closest('aside')?.hidden || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName) || t?.isContentEditable) return;
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       if (document.querySelector('dialog[open]')) return;
       e.preventDefault();

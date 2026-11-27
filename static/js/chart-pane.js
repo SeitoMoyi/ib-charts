@@ -73,6 +73,14 @@ export class ChartPane {
   setTimeframe(tf) { this.state.tf = tf; this.subscribe(); }
   setRth(rth) { this.state.rth = rth; this.subscribe(); }
   addStudy(ref, inputs) { return this.studies.add(ref, inputs); }
+
+  /** Dashed lines for this symbol's price alerts. */
+  setAlertLevels(levels) {
+    for (const l of this.alertLines || []) this.candles.removePriceLine(l);
+    this.alertLines = levels.map((price) => this.candles.createPriceLine({
+      price, color: '#ff9800', lineStyle: LWC.LineStyle.LargeDashed, lineWidth: 1, axisLabelVisible: true, title: '⏰',
+    }));
+  }
   studiesChanged() {
     this.state.studies = this.studies.configs();
     this.changed();

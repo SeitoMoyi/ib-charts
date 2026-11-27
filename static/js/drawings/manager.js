@@ -472,6 +472,7 @@ export class DrawingManager {
     this.styleBar = el('div', { class: 'draw-style', hidden: true },
       ...swatches, el('span', { class: 'sep' }), ...widths, el('span', { class: 'sep' }), ...dashes, el('span', { class: 'sep' }),
       el('button', { class: 'lock', title: 'Lock / unlock', onclick: () => this.patch(this.selected, (d) => { d.locked = !d.locked; }) }, '🔒'),
+      el('button', { class: 'bell', title: 'Add alert on this line', onclick: () => this.selectedDrawing && this.pane.hooks.onDrawingAlert?.(this.selectedDrawing) }, '⏰'),
       el('button', { title: 'Delete (Del)', onclick: () => this.selected && this.remove(this.selected) }, '🗑'));
     this.styleBar.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.pane.root.append(this.styleBar);
@@ -490,6 +491,7 @@ export class DrawingManager {
     this.styleBar.querySelectorAll('.wbtn').forEach((b) => b.classList.toggle('on', Number(b.dataset.w) === d.style.width));
     this.styleBar.querySelectorAll('.dbtn').forEach((b) => b.classList.toggle('on', Number(b.dataset.dash) === d.style.dash));
     this.styleBar.querySelector('.lock').classList.toggle('on', !!d.locked);
+    this.styleBar.querySelector('.bell').hidden = !['hline', 'hray', 'trend', 'ray', 'extended'].includes(d.type);
   }
 }
 
