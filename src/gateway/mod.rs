@@ -137,7 +137,7 @@ pub struct Gateway {
 }
 
 impl Gateway {
-    pub async fn new(store: Store, ib: Arc<Ib>, host: String, cli_port: u16) -> Arc<Self> {
+    pub async fn new(store: Store, ib: Arc<Ib>, host: String, cli_port: u16, demo: bool) -> Arc<Self> {
         let settings: Settings = match store.get("settings", "gateway").await {
             Ok(Some(b)) => serde_json::from_slice(&b).unwrap_or_default(),
             _ => Settings::default(),
@@ -146,7 +146,7 @@ impl Gateway {
         if settings.configured {
             ib.set_address(format!("{host}:{port}")).await;
         }
-        let want = settings.configured && settings.mode != Mode::External;
+        let want = !demo && settings.configured && settings.mode != Mode::External;
         let status = Status {
             phase: Phase::Offline,
             message: "Starting…".into(),
@@ -168,7 +168,11 @@ impl Gateway {
             last_error: std::sync::Mutex::new(None),
             wake: Notify::new(),
         });
-        tokio::spawn(gw.clone().supervise());
+        if demo {
+            gw.set(Phase::Connected, "Demo mode — synthetic data, not connected to IB".into(), false);
+        } else {
+            tokio::spawn(gw.clone().supervise());
+        }
         gw
     }
 

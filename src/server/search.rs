@@ -29,6 +29,9 @@ pub async fn search(State(st): State<AppState>, Query(p): Query<SearchParams>) -
     if q.is_empty() || q.len() > 32 {
         return Json(Vec::<SearchHit>::new()).into_response();
     }
+    if st.demo {
+        return Json(crate::demo::search(q)).into_response();
+    }
     let result = async {
         let client = st.ib.client().await?;
         let hits = client

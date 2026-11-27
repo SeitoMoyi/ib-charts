@@ -26,6 +26,8 @@ pub struct AppState {
     pub quotes: Arc<crate::quotes::QuoteHub>,
     /// App-wide events pushed to every open window (e.g. a script file changed).
     pub events: tokio::sync::broadcast::Sender<serde_json::Value>,
+    /// `--demo`: synthetic data instead of IB.
+    pub demo: bool,
     /// Only accept requests addressed to localhost (blocks DNS-rebinding attacks).
     pub loopback_only: bool,
 }

@@ -93,13 +93,15 @@ struct Entry {
 
 pub struct QuoteHub {
     ib: Arc<Ib>,
+    demo: bool,
     entries: Mutex<HashMap<String, Entry>>,
 }
 
 impl QuoteHub {
-    pub fn new(ib: Arc<Ib>) -> Arc<Self> {
+    pub fn new(ib: Arc<Ib>, demo: bool) -> Arc<Self> {
         Arc::new(Self {
             ib,
+            demo,
             entries: Mutex::new(HashMap::new()),
         })
     }
@@ -115,7 +117,19 @@ impl QuoteHub {
         }
         let (tx, rx) = broadcast::channel(64);
         let last = Arc::new(std::sync::Mutex::new(None));
-        let task = tokio::spawn(run(self.ib.clone(), key.clone(), tx.clone(), last.clone()));
+        let task = if self.demo {
+            let (sym, tx2, last2) = (key.clone(), tx.clone(), last.clone());
+            tokio::spawn(async move {
+                crate::demo::quotes(sym, move |q| {
+                    let q = Arc::new(q);
+                    *last2.lock().unwrap() = Some(q.clone());
+                    let _ = tx2.send(q);
+                })
+                .await
+            })
+        } else {
+            tokio::spawn(run(self.ib.clone(), key.clone(), tx.clone(), last.clone()))
+        };
         entries.insert(key, Entry { tx, last, refs: 1, task });
         (rx, None)
     }

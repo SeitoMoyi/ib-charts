@@ -230,6 +230,9 @@ async fn handle_socket(socket: WebSocket, st: AppState) {
 
 async fn stream_bars(st: &AppState, out: &Out, input: &str, tf_id: &str, rth: bool) -> Result<()> {
     let tf = timeframe::parse(tf_id).ok_or_else(|| anyhow!("unknown timeframe '{tf_id}'"))?;
+    if st.demo {
+        return stream_demo(out, input, tf_id, tf.intraday).await;
+    }
     out.send(json!({"type": "status", "message": format!("Looking up {input}…")})).await;
 
     let r = st.ib.resolve(input).await?;
@@ -272,4 +275,25 @@ async fn stream_bars(st: &AppState, out: &Out, input: &str, tf_id: &str, rth: bo
 
     out.send(json!({"type": "ended"})).await;
     Ok(())
+}
+
+async fn stream_demo(out: &Out, input: &str, tf_id: &str, intraday: bool) -> Result<()> {
+    let symbol = input.trim().to_uppercase();
+    let mut series = crate::demo::history(&symbol, tf_id);
+    let price = crate::demo::base_price(&symbol);
+    out.send(json!({
+        "type": "history",
+        "symbol": symbol,
+        "description": "Demo data · not real prices",
+        "info": crate::demo::symbol_info(&symbol),
+        "intraday": intraday,
+        "hasVolume": true,
+        "minTick": if price < 10.0 { 0.0001 } else { 0.01 },
+        "bars": series.history,
+    }))
+    .await;
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        out.send(json!({"type": "bar", "bar": series.tick()})).await;
+    }
 }

@@ -10,6 +10,7 @@
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
 mod contracts;
+mod demo;
 mod desktop;
 mod gateway;
 mod ib;
@@ -51,6 +52,10 @@ pub struct Args {
     /// a random free localhost port for the desktop app.
     #[arg(long, env = "LISTEN")]
     pub listen: Option<String>,
+
+    /// Use synthetic demo data instead of connecting to IB (try the app without an account).
+    #[arg(long)]
+    pub demo: bool,
 
     /// Where watchlists, drawings, scripts and layouts are saved.
     /// Defaults to the platform's per-user app-data directory.
@@ -102,7 +107,7 @@ async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
         None => store::Store::default_root()?,
     })?;
     tracing::info!("data directory: {}", store.root().display());
-    let gateway = gateway::Gateway::new(store.clone(), ib.clone(), args.ib_host.clone(), args.ib_port).await;
+    let gateway = gateway::Gateway::new(store.clone(), ib.clone(), args.ib_host.clone(), args.ib_port, args.demo).await;
     tracing::info!("IB API address: {}", ib.address());
 
     let listen = args
@@ -130,7 +135,8 @@ async fn start_server(args: &Args) -> Result<(String, Arc<gateway::Gateway>)> {
         ib: ib.clone(),
         store,
         gateway: gateway.clone(),
-        quotes: quotes::QuoteHub::new(ib.clone()),
+        quotes: quotes::QuoteHub::new(ib.clone(), args.demo),
+        demo: args.demo,
         events,
         loopback_only: addr.ip().is_loopback(),
     };

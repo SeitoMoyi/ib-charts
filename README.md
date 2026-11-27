@@ -56,6 +56,7 @@ Needs [Rust](https://rustup.rs) (stable). On Linux also install the Tauri system
 cargo run --release                          # desktop app, Gateway live on 4001
 cargo run --release -- --ib-port 4002        # paper Gateway
 cargo run --release -- --browser             # no window: open http://127.0.0.1:8088 in your browser
+cargo run --release -- --demo                # try it without IB: synthetic live data
 cargo run --release -- --help                # all options
 
 cargo install tauri-cli --locked && cargo tauri build   # build the .app/.dmg, .msi or .AppImage/.deb
@@ -72,6 +73,7 @@ Options can also be set with environment variables: `IB_HOST`, `IB_PORT`, `IB_CL
 | `--ib-port` | `4001` | API port |
 | `--client-id` | `77` | Must differ from other API apps on the same Gateway |
 | `--browser` | | Use your web browser instead of the desktop window |
+| `--demo` | | Synthetic live data instead of IB, for trying the app (or developing it) without an account |
 | `--no-open` | | With `--browser`: don't open the browser automatically |
 | `--listen` | `127.0.0.1:8088` (browser) / random port (desktop) | UI server address |
 | `--data-dir` | per-user app-data dir | Where settings, watchlist, drawings, scripts and layouts are saved |
