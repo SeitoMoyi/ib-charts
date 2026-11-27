@@ -51,10 +51,18 @@
         <button data-tab="watchlist" class="active">Watchlist</button>
         <button data-tab="alerts">Alerts <span id="alert-count"></span></button>
         <button data-tab="datawin">Data</button>
+        <button data-tab="positions">Positions</button>
+        <button data-tab="scanner">Scanner</button>
+        <button data-tab="news">News</button>
+        <button data-tab="info">Info</button>
       </div>
       <div id="watchlist" class="sb-pane"></div>
       <div id="alerts" class="sb-pane" hidden></div>
       <div id="datawin" class="sb-pane" hidden></div>
+      <div id="positions" class="sb-pane scroll" hidden></div>
+      <div id="scanner" class="sb-pane scroll" hidden></div>
+      <div id="news" class="sb-pane scroll" hidden></div>
+      <div id="info" class="sb-pane scroll" hidden></div>
     </aside>
   </div>
   <dialog id="gw-dialog"></dialog>
@@ -62,6 +70,7 @@
   <dialog id="study-dialog"></dialog>
   <dialog id="alert-dialog"></dialog>
   <dialog id="help-dialog"></dialog>
+  <dialog id="news-dialog" class="wide"></dialog>
   <script src="/vendor/codemirror/codemirror.js"></script>
   <script src="/vendor/codemirror/javascript.js"></script>
   <script src="/vendor/codemirror/matchbrackets.js"></script>

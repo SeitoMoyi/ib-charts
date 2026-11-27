@@ -1,6 +1,6 @@
 // Gateway status pill + setup / control dialog.
 
-import { $, el } from './util.js';
+import { $, el, fill } from './util.js';
 
 const PHASE = {
   offline: ['Gateway offline', ''],
@@ -72,7 +72,7 @@ async function openDialog() {
   info = (await fetchInfo()) || info;
   if (!info) return;
   const dlg = $('gw-dialog');
-  dlg.replaceChildren(buildForm(info));
+  fill(dlg, buildForm(info));
   renderStatus();
   dlg.showModal();
   refreshLog();

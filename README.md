@@ -32,6 +32,12 @@ TradingView-style charts that run on your own computer and use the market data y
   - **Saving:** saved layouts and indicator templates.
   - **Screenshots:** copy, or save to Downloads.
   - **Shortcuts:** press `?` for the list.
+- **IB extras (read-only):**
+  - **Positions:** your positions with live P&L, average cost on the chart, and your fills as markers.
+  - **Market scanner:** top gainers and losers, most active, unusual volume…
+  - **News:** headlines and articles.
+  - **Earnings:** markers on the chart (needs Wall Street Horizon data).
+  - **Symbol info:** contract details, trading sessions and earnings dates.
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.

@@ -186,6 +186,59 @@ pub fn search(q: &str) -> Vec<Value> {
         .collect()
 }
 
+// ---------- demo account / research data ----------
+
+pub fn positions() -> Value {
+    json!([
+        { "account": "DEMO", "conId": 0, "symbol": "AAPL", "localSymbol": "AAPL", "secType": "Stock", "currency": "USD", "position": 100.0, "avgCost": round_to(base_price("AAPL") * 0.97, 0.01), "multiplier": "" },
+        { "account": "DEMO", "conId": 0, "symbol": "MSFT", "localSymbol": "MSFT", "secType": "Stock", "currency": "USD", "position": -50.0, "avgCost": round_to(base_price("MSFT") * 1.02, 0.01), "multiplier": "" },
+    ])
+}
+
+pub fn executions() -> Value {
+    let now = chrono::Utc::now();
+    let t = |mins: i64| (now - chrono::Duration::minutes(mins)).format("%Y%m%d %H:%M:%S UTC").to_string();
+    let p = base_price("AAPL");
+    json!([
+        { "conId": 0, "symbol": "AAPL", "side": "buy", "shares": 60.0, "price": round_to(p * 0.995, 0.01), "time": t(300), "exchange": "DEMO" },
+        { "conId": 0, "symbol": "AAPL", "side": "buy", "shares": 40.0, "price": round_to(p * 0.99, 0.01), "time": t(180), "exchange": "DEMO" },
+        { "conId": 0, "symbol": "AAPL", "side": "sell", "shares": 20.0, "price": round_to(p * 1.002, 0.01), "time": t(60), "exchange": "DEMO" },
+    ])
+}
+
+pub fn scanner(code: &str) -> Value {
+    let mut rng = Rng::new(hash(code));
+    let mut list: Vec<&str> = SEARCH.to_vec();
+    for i in (1..list.len()).rev() {
+        list.swap(i, (rng.next() * (i + 1) as f64) as usize);
+    }
+    json!(
+        list.iter()
+            .enumerate()
+            .map(|(i, s)| json!({ "rank": i, "symbol": s, "exchange": "DEMO", "currency": "USD", "name": format!("{s} (demo)") }))
+            .collect::<Vec<_>>()
+    )
+}
+
+pub fn news(symbol: &str) -> Value {
+    let now = chrono::Utc::now().timestamp();
+    let s = symbol.to_uppercase();
+    json!({
+        "providers": [{ "code": "DEMO", "name": "Demo news" }],
+        "items": [
+            { "time": now - 3600, "provider": "DEMO", "id": "1", "headline": format!("{s} shares move as traders weigh outlook (demo)") },
+            { "time": now - 86400, "provider": "DEMO", "id": "2", "headline": format!("Analyst updates price target on {s} (demo)") },
+            { "time": now - 3 * 86400, "provider": "DEMO", "id": "3", "headline": format!("{s} to report quarterly results (demo)") },
+        ],
+    })
+}
+
+pub fn earnings() -> Value {
+    let today = chrono::Utc::now().date_naive();
+    let d = |days: i64| (today + chrono::Duration::days(days)).format("%Y%m%d").to_string();
+    json!([d(-180), d(-90), d(-2), d(88)])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

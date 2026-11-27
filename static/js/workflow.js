@@ -2,7 +2,7 @@
 // indicator templates and the keyboard-shortcut reference.
 
 import * as api from './api.js';
-import { $, confirmDialog, el } from './util.js';
+import { $, confirmDialog, el, fill } from './util.js';
 
 // ---------- bar replay ----------
 
@@ -18,13 +18,13 @@ export function initReplay(getActive) {
     $('replay-btn').classList.toggle('active', !!r || !!picking);
     if (picking) {
       bar.hidden = false;
-      bar.replaceChildren(el('span', {}, 'Click on the chart where the replay should start'), el('button', { onclick: cancelPick }, 'Cancel'));
+      fill(bar, el('span', {}, 'Click on the chart where the replay should start'), el('button', { onclick: cancelPick }, 'Cancel'));
       return;
     }
     bar.hidden = !r;
     if (!r) return;
     const at = r.all[r.index];
-    bar.replaceChildren(
+    fill(bar, 
       el('b', {}, 'Replay'),
       el('button', { title: 'Pick a new start', onclick: () => pick() }, '⏮'),
       el('button', { title: r.playing ? 'Pause' : 'Play', class: 'primary', onclick: () => pane.replayPlay(!r.playing) }, r.playing ? '⏸' : '▶'),
@@ -82,7 +82,7 @@ export function renderDataWindow(pane, bar) {
   if (!box || box.hidden || !pane) return;
   const bars = pane.data.bars;
   bar = bar || bars.at(-1);
-  if (!bar) { box.replaceChildren(el('div', { class: 'obj-empty' }, 'No data')); return; }
+  if (!bar) { fill(box, el('div', { class: 'obj-empty' }, 'No data')); return; }
   const i = bars.indexOf(bar);
   const f = (v, p = pane.data.precision) => (Number.isFinite(v) ? v.toFixed(p) : '–');
   const prev = i > 0 ? bars[i - 1].close : bar.open;
@@ -99,7 +99,7 @@ export function renderDataWindow(pane, bar) {
     sections.push(el('div', { class: 'dw-head' }, s.title));
     for (const p of s.result.plots) sections.push(row(p.title, f(p.values[i], s.result.meta.precision ?? 4), p.colors?.[i] || p.color));
   }
-  box.replaceChildren(...sections);
+  fill(box, ...sections);
 }
 
 // ---------- screenshot ----------
@@ -211,7 +211,7 @@ export const SHORTCUTS = [
 
 export function showShortcuts() {
   const dlg = $('help-dialog');
-  dlg.replaceChildren(el('div', { class: 'gw-form' },
+  fill(dlg, el('div', { class: 'gw-form' },
     el('div', { class: 'gw-head' }, el('h2', {}, 'Keyboard shortcuts'), el('button', { class: 'icon', onclick: () => dlg.close() }, '✕')),
     el('div', { class: 'shortcuts' }, ...SHORTCUTS.flatMap(([k, v]) => [el('kbd', {}, k), el('span', {}, v)]))));
   dlg.showModal();

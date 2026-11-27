@@ -3,7 +3,7 @@
 
 import * as LWC from '/vendor/lightweight-charts.mjs';
 import * as api from '../api.js';
-import { el } from '../util.js';
+import { el, fill } from '../util.js';
 
 const TIMEOUT_MS = 3000;
 const RERUN_MS = 750; // live updates: rerun at most this often
@@ -334,6 +334,7 @@ export class StudyHost {
       if (s.overlay) overlayMarkers.push(...markers);
       else s.markers?.setMarkers(markers);
     }
+    for (const list of Object.values(this.pane.extraMarkers || {})) overlayMarkers.push(...list);
     overlayMarkers.sort((a, b) => a.time - b.time);
     this.candleMarkers.setMarkers(overlayMarkers);
     this.renderLegends();
@@ -351,7 +352,7 @@ export class StudyHost {
     }
     // Overlay (and hidden) studies are listed under the main OHLC legend.
     const main = this.pane.legend.querySelector('.legend-studies') || this.pane.legend.appendChild(el('div', { class: 'legend-studies' }));
-    main.replaceChildren(...[...(byPane.get(0) || []), ...(byPane.get(-1) || [])].map((s) => this.legendLine(s, idx)));
+    fill(main, ...[...(byPane.get(0) || []), ...(byPane.get(-1) || [])].map((s) => this.legendLine(s, idx)));
 
     const needed = [...byPane.keys()].filter((k) => k > 0);
     while (this.legendBoxes.length > needed.length) this.legendBoxes.pop().remove();
@@ -359,7 +360,7 @@ export class StudyHost {
       let box = this.legendBoxes[i];
       if (!box) { box = el('div', { class: 'legend pane-legend' }); this.pane.root.append(box); this.legendBoxes.push(box); }
       box.dataset.pane = paneIdx;
-      box.replaceChildren(...byPane.get(paneIdx).map((s) => this.legendLine(s, idx)));
+      fill(box, ...byPane.get(paneIdx).map((s) => this.legendLine(s, idx)));
     });
     this.positionLegends();
   }

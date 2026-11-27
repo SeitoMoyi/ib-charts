@@ -58,3 +58,8 @@ export function openMenu(anchor, build) {
   setTimeout(() => { document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', esc, true); }, 0);
   return close;
 }
+
+/** replaceChildren that skips null/false entries (the DOM would print them as text). */
+export function fill(node, ...children) {
+  node.replaceChildren(...children.flat().filter((c) => c != null && c !== false));
+}

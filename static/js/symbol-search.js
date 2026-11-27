@@ -1,6 +1,6 @@
 // Symbol box with IB symbol-search autocomplete.
 
-import { el } from './util.js';
+import { el, fill } from './util.js';
 
 /**
  * @param {HTMLInputElement} input
@@ -20,7 +20,7 @@ export function initSymbolSearch(input, list, onChoose, current) {
   };
 
   const render = () => {
-    list.replaceChildren(...hits.map((h, i) => el('li', {
+    fill(list, ...hits.map((h, i) => el('li', {
       class: i === sel ? 'sel' : '',
       onmousedown: (e) => { e.preventDefault(); choose(h.input); },
     }, el('span', { class: 'sym' }, h.input), el('span', { class: 'meta' }, [h.kind, h.exchange, h.currency].filter(Boolean).join(' · ')))));

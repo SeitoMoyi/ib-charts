@@ -11,6 +11,7 @@ export const settings = {
   prevClose: true,
   dayHighLow: false,
   volumeProfile: false,
+  earnings: true,
 };
 
 const listeners = new Set();

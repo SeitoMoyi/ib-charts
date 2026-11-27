@@ -50,7 +50,7 @@ export class Layout {
       ...this.hooks,
       onChange: (p) => this.onPaneChange(p),
       onStatus: (p, text, kind) => { if (p === this.active) this.hooks.onStatus?.(p, text, kind); },
-      onLoad: (p) => { if (p === this.active) this.hooks.onLoad?.(p); },
+      onLoad: (p) => { this.hooks.onAnyLoad?.(p); if (p === this.active) this.hooks.onLoad?.(p); },
     });
     pane.root.addEventListener('pointerdown', () => { if (pane !== this.active) this.activate(pane); }, true);
     pane.chart.subscribeCrosshairMove((param) => this.syncCrosshair(pane, param));

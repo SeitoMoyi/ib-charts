@@ -436,3 +436,26 @@ dialog.confirm { width: min(420px, 90vw); }
 .toast.info { border-color: var(--accent); }
 .shortcuts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; align-items: center; }
 kbd { font: 12px ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; white-space: nowrap; }
+
+/* ---------- IB panels ---------- */
+.sb-tabs { flex-wrap: wrap; }
+.sb-tabs button { flex: 1 0 auto; padding: 7px 6px; font-size: 12px; }
+.sb-pane.scroll { overflow-y: auto; display: block; }
+.pos-row { display: grid; grid-template-columns: 1fr 44px 62px 62px 56px 56px; gap: 4px; padding: 6px 10px; font-variant-numeric: tabular-nums; cursor: pointer; border-bottom: 1px solid #1a1e29; }
+.pos-row > span { text-align: right; }
+.pos-row.head { color: var(--muted); font-size: 11px; cursor: default; }
+.pos-row:not(.head):hover { background: var(--panel); }
+.pos-total { padding: 8px 10px; text-align: right; }
+.up { color: var(--up); } .down { color: var(--down); }
+.pad { padding: 6px 10px; }
+.scan-ctl { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 8px; }
+.scan-ctl select, .scan-ctl input { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.scan-ctl input { width: 60px; margin-left: 4px; }
+.news-row { padding: 8px 10px; border-bottom: 1px solid #1a1e29; cursor: pointer; }
+.news-row:hover { background: var(--panel); }
+.news-row .muted { font-size: 11px; margin-top: 2px; }
+dialog.wide { width: min(820px, 94vw); }
+.news-frame { width: 100%; height: 60vh; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); }
+.sb-tabs { flex-wrap: nowrap; }
+.sb-tabs button { flex: 1 1 auto; padding: 8px 3px; font-size: 11.5px; min-width: 0; }
+.pos-row { grid-template-columns: minmax(44px, 1fr) 38px 54px 54px 46px 50px; gap: 3px; padding: 6px 8px; font-size: 12px; }

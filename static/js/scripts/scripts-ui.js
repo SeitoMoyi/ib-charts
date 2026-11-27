@@ -1,7 +1,7 @@
 // Indicator picker, study settings dialog and the script editor.
 
 import * as api from '../api.js';
-import { $, confirmDialog, el } from '../util.js';
+import { $, confirmDialog, el, fill } from '../util.js';
 import { templateSection } from '../workflow.js';
 import { forgetCode, listScripts, loadCode, splitRef } from './studies.js';
 
@@ -75,7 +75,7 @@ async function openPicker() {
   const render = () => {
     const q = search.value.trim().toLowerCase();
     const f = (n) => !q || n.toLowerCase().includes(q);
-    list.replaceChildren(
+    fill(list, 
       el('div', { class: 'ind-section' }, 'Built-in'),
       ...builtin.filter(f).map((n) => row(`builtin:${n}`, n, false)),
       el('div', { class: 'ind-section' }, 'My scripts'),
@@ -85,7 +85,7 @@ async function openPicker() {
   search.addEventListener('input', render);
   render();
   const templates = el('div', {}, ...(await templateSection(getActive, () => dlg.close(), toast)));
-  dlg.replaceChildren(el('div', { class: 'gw-form' },
+  fill(dlg, el('div', { class: 'gw-form' },
     el('div', { class: 'gw-head' }, el('h2', {}, 'Indicators'), el('button', { type: 'button', class: 'icon', onclick: () => dlg.close() }, '✕')),
     search, list, templates, el('div', { id: 'ind-toast', class: 'muted' })));
   dlg.showModal();
@@ -116,7 +116,7 @@ export function openStudySettings(host, study) {
     } else input = el('input', { value: v, oninput: (e) => set(e.target.value) });
     return el('label', { class: 'row' }, el('span', { class: 'label' }, d.title), input);
   };
-  dlg.replaceChildren(el('form', { class: 'gw-form', onsubmit: (e) => { e.preventDefault(); host.update(study.cfg.uid, { inputs: values }); dlg.close(); } },
+  fill(dlg, el('form', { class: 'gw-form', onsubmit: (e) => { e.preventDefault(); host.update(study.cfg.uid, { inputs: values }); dlg.close(); } },
     el('div', { class: 'gw-head' }, el('h2', {}, study.title), el('button', { type: 'button', class: 'icon', onclick: () => dlg.close() }, '✕')),
     defs.length ? el('div', { class: 'inputs' }, ...defs.map(field)) : el('div', { class: 'muted' }, 'This script has no inputs.'),
     el('div', { class: 'gw-actions' },
@@ -166,7 +166,7 @@ function buildEditor(box) {
   const help = el('div', { class: 'ed-help', hidden: true });
   help.innerHTML = API_HELP;
   const host = el('div', { class: 'ed-cm' });
-  box.replaceChildren(
+  fill(box, 
     el('div', { class: 'ed-resize', title: 'Drag to resize' }),
     el('div', { class: 'ed-bar' },
       el('b', {}, 'Script'), nameInput,

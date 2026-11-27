@@ -1,6 +1,7 @@
 //! HTTP + WebSocket server for the chart UI.
 
 mod gateway_api;
+mod ibinfo;
 mod search;
 mod store_api;
 mod stream;
@@ -48,6 +49,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/gateway/settings", axum::routing::put(gateway_api::put_settings))
         .route("/api/gateway/log", get(gateway_api::log))
         .route("/api/gateway/{action}", axum::routing::post(gateway_api::action))
+        .route("/api/positions", get(ibinfo::positions))
+        .route("/api/executions", get(ibinfo::executions))
+        .route("/api/scanner", get(ibinfo::scanner))
+        .route("/api/news", get(ibinfo::news))
+        .route("/api/news/article", get(ibinfo::news_article))
+        .route("/api/earnings", get(ibinfo::earnings))
         .route("/api/notify", axum::routing::post(notify))
         .route("/api/screenshot", axum::routing::post(screenshot))
         .route("/ws", get(stream::ws_upgrade))

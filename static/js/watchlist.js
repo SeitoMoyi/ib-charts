@@ -2,7 +2,7 @@
 // drag to reorder, click to chart, ↑/↓ to step through.
 
 import * as api from './api.js';
-import { $, el } from './util.js';
+import { $, el, fill } from './util.js';
 
 const DEFAULT = {
   items: [
@@ -145,7 +145,7 @@ export class Watchlist {
   // ---------- rendering ----------
 
   render() {
-    this.body.replaceChildren(...this.data.items.map((item, idx) => (item.type === 'section' ? this.sectionRow(item, idx) : this.symbolRow(item, idx))));
+    fill(this.body, ...this.data.items.map((item, idx) => (item.type === 'section' ? this.sectionRow(item, idx) : this.symbolRow(item, idx))));
     this.highlight();
     const n = this.symbols().length;
     this.footer.className = `wl-footer ${n > LINE_LIMIT * 0.9 ? 'warn' : ''}`;

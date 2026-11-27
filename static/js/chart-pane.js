@@ -7,7 +7,7 @@ import { DrawingManager } from './drawings/manager.js';
 import { logicalToX } from './drawings/geometry.js';
 import { StudyHost } from './scripts/studies.js';
 import { THEMES, parseSessions, settings, tzLabel, tzOffset } from './settings.js';
-import { el, fmtVol, precisionFor } from './util.js';
+import { el, fmtVol, precisionFor, fill } from './util.js';
 
 const UP = '#26a69a', DOWN = '#ef5350';
 const COMPARE_COLORS = ['#ff9800', '#e040fb', '#00bcd4', '#ffeb3b', '#8bc34a'];
@@ -125,6 +125,25 @@ export class ChartPane {
     }));
   }
 
+  /** Your average cost as a price line (positions panel). */
+  setPositionLine(pos) {
+    if (this.posLine) this.candles.removePriceLine(this.posLine);
+    this.posLine = null;
+    this.position = pos;
+    if (pos) {
+      this.posLine = this.candles.createPriceLine({
+        price: pos.price, color: '#2962ff', lineStyle: LWC.LineStyle.Solid, lineWidth: 1, axisLabelVisible: true,
+        title: `${pos.qty > 0 ? 'Long' : 'Short'} ${Math.abs(pos.qty)}`,
+      });
+    }
+  }
+
+  /** Markers that aren't from indicators (fills, earnings), merged into the chart's markers. */
+  setExtraMarkers(kind, markers) {
+    this.extraMarkers = { ...this.extraMarkers, [kind]: markers };
+    this.studies.refreshData();
+  }
+
   studiesChanged() {
     this.state.studies = this.studies.configs();
     this.changed();
@@ -163,11 +182,13 @@ export class ChartPane {
     }
     this.drawings.series = this.candles;
     this.studies.reattachMarkers();
-    for (const l of [...(this.alertLines || []), ...(this.refLines || [])]) old.removePriceLine(l);
+    for (const l of [...(this.alertLines || []), ...(this.refLines || []), ...(this.posLine ? [this.posLine] : [])]) old.removePriceLine(l);
     this.alertLines = this.refLines = [];
+    this.posLine = null;
     this.chart.removeSeries(old);
     this.renderMain();
     this.setAlertLevels(this.alertLevels || []);
+    this.setPositionLine(this.position);
     this.updateRefLines();
     this.changed();
   }
@@ -437,7 +458,7 @@ export class ChartPane {
 
   renderCompareLegend() {
     const box = this.legend.querySelector('.legend-compares');
-    box.replaceChildren(...this.state.compares.map((c) => {
+    fill(box, ...this.state.compares.map((c) => {
       const cs = this.compareSeries.get(c.symbol);
       return el('div', { class: 'legend-line' },
         el('span', { class: 'obj-dot', style: `background:${c.color}` }),
@@ -496,14 +517,14 @@ export class ChartPane {
     this.legend.querySelector('.legend-symbol').textContent = this.data.symbol;
     this.legend.querySelector('.legend-desc').textContent = this.data.description;
     const ohlc = this.legend.querySelector('.legend-ohlc');
-    if (!bar) { ohlc.replaceChildren(); return; }
+    if (!bar) { fill(ohlc, ); return; }
     const i = bars.indexOf(bar);
     const prev = i > 0 ? bars[i - 1].close : bar.open;
     const chg = bar.close - prev, pct = prev ? (chg / prev) * 100 : 0;
     const cls = chg >= 0 ? 'up' : 'down';
     const f = (v) => v.toFixed(precision);
     const kv = (k, v) => [el('span', { class: 'k' }, k), ' ', el('span', { class: cls }, f(v))];
-    ohlc.replaceChildren(
+    fill(ohlc, 
       ...kv('O', bar.open), ...kv('H', bar.high), ...kv('L', bar.low), ...kv('C', bar.close), ' ',
       el('span', { class: cls }, `${chg >= 0 ? '+' : ''}${f(chg)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`),
       ...(hasVolume && bar.volume != null ? [' ', el('span', { class: 'k' }, 'V'), ' ', fmtVol(bar.volume)] : []),

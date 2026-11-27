@@ -9,7 +9,7 @@ import * as api from './api.js';
 import { TimeMapper } from './drawings/geometry.js';
 import { SHAPES } from './drawings/shapes.js';
 import { Runner, loadCode, splitRef } from './scripts/studies.js';
-import { $, confirmDialog, el } from './util.js';
+import { $, confirmDialog, el, fill } from './util.js';
 
 const LINE_TYPES = ['hline', 'hray', 'trend', 'ray', 'extended'];
 const SCRIPT_EVERY_MS = 2000;
@@ -275,7 +275,7 @@ export function initAlertsUi(engine) {
       el('button', { title: 'Edit', onclick: () => openAlertDialog(engine, { edit: a }) }, '✎'),
       el('button', { title: 'Delete', onclick: async () => { if (await confirmDialog('Delete this alert?', 'Delete')) engine.remove(a.id); } }, '×')));
     const log = engine.log.slice(0, 50).map((l) => el('div', { class: 'al-log' }, el('span', { class: 'muted' }, new Date(l.time).toLocaleString()), el('div', {}, l.message)));
-    box.replaceChildren(
+    fill(box, 
       el('div', { class: 'wl-head' }, el('span', { class: 'wl-title' }, 'Alerts'),
         el('button', { class: 'small', title: 'Create alert (Alt+A)', onclick: () => openAlertDialog(engine, {}) }, '+ Create')),
       el('div', { class: 'al-list' }, ...(rows.length ? rows : [el('div', { class: 'obj-empty' }, 'No alerts yet. Press Alt+A to create one.')])),
@@ -378,7 +378,7 @@ export function openAlertDialog(engine, { edit = null, drawing = null } = {}) {
   el('label', { class: 'row check' }, sound, 'Play a sound'),
   el('div', { class: 'muted' }, 'Line and script alerts follow the timeframe of the current chart. Alerts keep running while IB Charts is open (also when its window is closed to the tray).'),
   el('div', { class: 'gw-actions' }, el('button', { type: 'submit', class: 'primary' }, edit ? 'Save' : 'Create')));
-  dlg.replaceChildren(form);
+  fill(dlg, form);
   sync();
   dlg.showModal();
 }

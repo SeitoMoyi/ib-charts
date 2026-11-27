@@ -2,7 +2,7 @@
 // It always operates on the active chart's DrawingManager.
 
 import { SHAPES } from './drawings/shapes.js';
-import { $, el } from './util.js';
+import { $, el, fill } from './util.js';
 
 const svg = (body) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const ICONS = {
@@ -107,7 +107,7 @@ export function renderObjects(getActive) {
     iconBtn(s.cfg.hidden ? '◌' : '●', s.cfg.hidden ? 'Show' : 'Hide', () => pane.studies.update(s.cfg.uid, { hidden: !s.cfg.hidden }), s.cfg.hidden),
     iconBtn('⚙', 'Settings', () => pane.hooks.onStudySettings?.(pane.studies, s)),
     iconBtn('×', 'Remove', () => pane.studies.remove(s.cfg.uid))));
-  box.replaceChildren(
+  fill(box, 
     el('div', { class: 'obj-head' }, el('b', {}, `Objects — ${pane.data.symbol}`), el('button', { class: 'icon', onclick: () => { box.hidden = true; } }, '✕')),
     el('div', { class: 'obj-section' }, 'Indicators'), ...(inds.length ? inds : [el('div', { class: 'obj-empty' }, 'None')]),
     el('div', { class: 'obj-section' }, 'Drawings'), ...(rows.length ? rows : [el('div', { class: 'obj-empty' }, 'None — pick a tool on the left')]),
