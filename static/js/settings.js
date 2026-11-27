@@ -10,6 +10,7 @@ export const settings = {
   countdown: true,
   prevClose: true,
   dayHighLow: false,
+  volumeProfile: false,
 };
 
 const listeners = new Set();

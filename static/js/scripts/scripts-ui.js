@@ -2,6 +2,7 @@
 
 import * as api from '../api.js';
 import { $, confirmDialog, el } from '../util.js';
+import { templateSection } from '../workflow.js';
 import { forgetCode, listScripts, loadCode, splitRef } from './studies.js';
 
 const TEMPLATE = `// My indicator. Click "API" above for everything scripts can use.
@@ -83,9 +84,10 @@ async function openPicker() {
   };
   search.addEventListener('input', render);
   render();
+  const templates = el('div', {}, ...(await templateSection(getActive, () => dlg.close(), toast)));
   dlg.replaceChildren(el('div', { class: 'gw-form' },
     el('div', { class: 'gw-head' }, el('h2', {}, 'Indicators'), el('button', { type: 'button', class: 'icon', onclick: () => dlg.close() }, '✕')),
-    search, list, el('div', { id: 'ind-toast', class: 'muted' })));
+    search, list, templates, el('div', { id: 'ind-toast', class: 'muted' })));
   dlg.showModal();
   search.focus();
 }

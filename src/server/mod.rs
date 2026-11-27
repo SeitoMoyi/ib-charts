@@ -49,8 +49,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/gateway/log", get(gateway_api::log))
         .route("/api/gateway/{action}", axum::routing::post(gateway_api::action))
         .route("/api/notify", axum::routing::post(notify))
+        .route("/api/screenshot", axum::routing::post(screenshot))
         .route("/ws", get(stream::ws_upgrade))
         .fallback(static_file)
+        .layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }
@@ -69,6 +71,37 @@ async fn notify(axum::Json(n): axum::Json<Notify>) -> Response {
         StatusCode::NO_CONTENT.into_response()
     } else {
         StatusCode::NOT_IMPLEMENTED.into_response()
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ShotName {
+    name: String,
+}
+
+/// Saves a chart image (PNG) to the user's Downloads folder.
+async fn screenshot(axum::extract::Query(q): axum::extract::Query<ShotName>, body: axum::body::Bytes) -> Response {
+    if !body.starts_with(b"\x89PNG") {
+        return (StatusCode::BAD_REQUEST, "not a PNG").into_response();
+    }
+    let safe: String = q
+        .name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || " -_.".contains(c) { c } else { '_' })
+        .take(120)
+        .collect();
+    let safe = if safe.ends_with(".png") { safe } else { format!("{safe}.png") };
+    let dir = directories::UserDirs::new()
+        .and_then(|d| {
+            d.download_dir()
+                .map(|p| p.to_path_buf())
+                .or_else(|| Some(d.home_dir().to_path_buf()))
+        })
+        .unwrap_or_else(std::env::temp_dir);
+    let path = dir.join(safe.trim_start_matches('.'));
+    match tokio::fs::write(&path, &body).await {
+        Ok(()) => axum::Json(serde_json::json!({ "path": path.display().to_string() })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
 

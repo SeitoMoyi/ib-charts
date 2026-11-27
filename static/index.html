@@ -28,8 +28,11 @@
     </div>
     <div class="group">
       <button id="rth" title="Regular trading hours only">RTH</button>
-      <button id="layout-btn" title="Chart layout and linking">▦</button>
+      <button id="replay-btn" title="Bar replay">⏪ Replay</button>
+      <button id="shot-btn" title="Chart image (Alt+S copies)">📷</button>
+      <button id="layout-btn" title="Chart layout, linking and saved layouts">▦</button>
       <button id="settings-btn" title="Settings: theme, time zone, chart overlays">⚙</button>
+      <button id="help-btn" title="Keyboard shortcuts (?)">?</button>
     </div>
     <div id="status"><span id="dot"></span><span id="status-text">Connecting…</span></div>
     <button id="wl-toggle" type="button" title="Show / hide the side panel">☰ Panel</button>
@@ -47,15 +50,18 @@
       <div class="sb-tabs">
         <button data-tab="watchlist" class="active">Watchlist</button>
         <button data-tab="alerts">Alerts <span id="alert-count"></span></button>
+        <button data-tab="datawin">Data</button>
       </div>
       <div id="watchlist" class="sb-pane"></div>
       <div id="alerts" class="sb-pane" hidden></div>
+      <div id="datawin" class="sb-pane" hidden></div>
     </aside>
   </div>
   <dialog id="gw-dialog"></dialog>
   <dialog id="ind-dialog"></dialog>
   <dialog id="study-dialog"></dialog>
   <dialog id="alert-dialog"></dialog>
+  <dialog id="help-dialog"></dialog>
   <script src="/vendor/codemirror/codemirror.js"></script>
   <script src="/vendor/codemirror/javascript.js"></script>
   <script src="/vendor/codemirror/matchbrackets.js"></script>

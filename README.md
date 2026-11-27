@@ -23,6 +23,15 @@ TradingView-style charts that run on your own computer and use the market data y
   - **On the chart:** price alerts show as dashed ⏰ lines.
   - **Shortcut:** Alt+A creates an alert.
   - **When closed:** alerts keep running while the window is closed to the tray.
+- **Layouts and views:** 1, 2, 3 or 4 charts with linked symbol, timeframe, crosshair and scroll. Chart types: candles, hollow, Heikin Ashi, bars, line, area, baseline. Compare symbols, log/%/inverted scales, every IB bar size (type `15`, `2h`, `D`), time zones, light/dark theme.
+- **Session overlays:** pre/after-hours shading, session breaks, bar-close countdown, previous close and today's high/low.
+- **Workflow:**
+  - **Bar Replay:** step or play through history.
+  - **Volume profile** of the visible range.
+  - **Data window** showing every value under the crosshair.
+  - **Saving:** saved layouts and indicator templates.
+  - **Screenshots:** copy, or save to Downloads.
+  - **Shortcuts:** press `?` for the list.
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.

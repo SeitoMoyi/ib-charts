@@ -12,6 +12,7 @@ import { TIME_ZONES, loadSettings, onSettings, setSetting, settings } from './se
 import { initSymbolSearch } from './symbol-search.js';
 import { $, el, openMenu } from './util.js';
 import { Watchlist } from './watchlist.js';
+import { copyScreenshot, initReplay, layoutsMenuItems, renderDataWindow, saveScreenshot, showShortcuts } from './workflow.js';
 
 const FAVORITE_TFS = [['1m', '1m'], ['5m', '5m'], ['15m', '15m'], ['1h', '1h'], ['4h', '4h'], ['1D', 'D'], ['1W', 'W']];
 const ALL_TFS = [
@@ -54,6 +55,7 @@ const showTab = (tab) => {
   document.querySelectorAll('.sb-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.sb-pane').forEach((p) => { p.hidden = p.id !== tab; });
   ui.sidebarTab = tab;
+  if (tab === 'datawin') renderDataWindow(active());
 };
 document.querySelectorAll('.sb-tabs button').forEach((b) => b.addEventListener('click', () => { showTab(b.dataset.tab); saveUi(ui); }));
 showTab(ui.sidebarTab || 'watchlist');
@@ -102,7 +104,30 @@ $('compare-btn').addEventListener('click', (e) => openMenu(e.currentTarget, (clo
   ];
 }));
 
-$('layout-btn').addEventListener('click', (e) => openMenu(e.currentTarget, (close) => layout.menu(close)));
+$('layout-btn').addEventListener('click', (e) => openMenu(e.currentTarget, (close) => {
+  const saved = el('div');
+  layoutsMenuItems(layout, close, (l) => layout.load(l)).then((items) => saved.append(...items));
+  return [...layout.menu(close), saved];
+}));
+
+const toast = (text) => {
+  let box = $('toasts');
+  if (!box) { box = el('div', { id: 'toasts' }); document.body.append(box); }
+  const t = el('div', { class: 'toast info' }, text);
+  box.prepend(t);
+  setTimeout(() => t.remove(), 4000);
+};
+$('shot-btn').addEventListener('click', (e) => openMenu(e.currentTarget, (close) => [
+  el('div', { class: 'menu-item', onclick: () => { close(); copyScreenshot(active(), toast); } }, 'Copy image (Alt+S)'),
+  el('div', { class: 'menu-item', onclick: () => { close(); saveScreenshot(active(), toast); } }, 'Save image to Downloads'),
+]));
+$('help-btn').addEventListener('click', showShortcuts);
+document.addEventListener('keydown', (e) => {
+  const t = document.activeElement;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName) || t?.isContentEditable || document.querySelector('dialog[open]')) return;
+  if (e.key === '?') { e.preventDefault(); showShortcuts(); }
+  if (e.altKey && e.code === 'KeyS') { e.preventDefault(); copyScreenshot(active(), toast); }
+});
 
 $('settings-btn').addEventListener('click', (e) => openMenu(e.currentTarget, () => {
   const toggle = (key, label) => el('label', { class: 'menu-item check' },
@@ -118,6 +143,7 @@ $('settings-btn').addEventListener('click', (e) => openMenu(e.currentTarget, () 
     toggle('countdown', 'Countdown to bar close'),
     toggle('prevClose', 'Previous close line'),
     toggle('dayHighLow', "Today's high / low lines"),
+    toggle('volumeProfile', 'Volume profile (visible range)'),
   ];
 }));
 
@@ -185,16 +211,18 @@ function parseTf(text) {
 }
 
 // ---------- charts ----------
-let drawTools;
+let drawTools, replay;
 layout = new Layout($('charts'), feed, ui.layout, {
   onStatus: (_p, text, kind) => setStatus(text, kind),
   onLoad: (p) => { document.title = `${p.data.symbol} · IB Charts`; },
   onStudySettings: (host, study) => openStudySettings(host, study),
   onDrawingAlert: (d) => openAlertDialog(alerts, { drawing: d }),
   onTimeZoneMenu: (anchor) => tzMenu(anchor),
+  onLegend: (p, bar) => { if (p === active()) renderDataWindow(p, bar); },
+  onReplay: () => replay?.render(),
   onPaneCreated: (p) => {
     p.drawings.onChange((m) => { if (p === active()) drawTools?.sync(); alerts.syncDrawings(m.key, m.drawings); });
-    p.onStudiesRun = () => { if (p === active()) renderObjects(active); };
+    p.onStudiesRun = () => { if (p === active()) { renderObjects(active); if (!p.hovering) renderDataWindow(p); } };
     p.setAlertLevels(alerts.levelsFor(p.state.symbol));
   },
   onActivate: (p) => {
@@ -205,7 +233,7 @@ layout = new Layout($('charts'), feed, ui.layout, {
     const st = document.getElementById('status-text');
     if (st && p.data.symbol) setStatus(`${p.data.symbol} ${p.state.tf} · live`, 'live');
   },
-  onActiveChange: () => { syncToolbar(); renderObjects(active); },
+  onActiveChange: () => { syncToolbar(); renderObjects(active); replay?.render(); },
   onAnyChange: (p) => p.setAlertLevels(alerts.levelsFor(p.state.symbol)),
   onChange: (l) => {
     ui.layout = l.serialize();
@@ -215,6 +243,7 @@ layout = new Layout($('charts'), feed, ui.layout, {
 });
 
 drawTools = initDrawingToolbar(active);
+replay = initReplay(active);
 drawTools.sync();
 initGateway(feed);
 initScriptsUi(active, () => layout.panes);

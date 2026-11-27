@@ -60,6 +60,17 @@ export class Layout {
     return pane;
   }
 
+  /** Replaces everything with a saved layout. */
+  load(saved) {
+    if (!saved?.panes?.length) return;
+    this.type = LAYOUTS[saved.type] ? String(saved.type) : '1';
+    this.link = { ...this.link, ...saved.link };
+    this.states = structuredClone(saved.panes);
+    this.activeIndex = saved.active ?? 0;
+    this.build();
+    this.changed();
+  }
+
   setType(type) {
     if (!LAYOUTS[type] || type === this.type) return;
     this.states = this.panes.map((p) => structuredClone(p.state));

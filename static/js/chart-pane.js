@@ -69,8 +69,11 @@ export class ChartPane {
 
     this.sessionLayer = new SessionLayer(this);
     this.infoLayer = new InfoLayer(this);
+    this.profileLayer = new VolumeProfileLayer(this);
     this.candles.attachPrimitive(this.sessionLayer);
     this.candles.attachPrimitive(this.infoLayer);
+    this.candles.attachPrimitive(this.profileLayer);
+    this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => this.profileLayer.invalidate());
     this.drawings = new DrawingManager(this);
     this.studies = new StudyHost(this);
     this.studies.setConfigs(this.state.studies);
@@ -154,7 +157,7 @@ export class ChartPane {
     this.state.chartType = type;
     const old = this.candles;
     this.candles = this.createMainSeries(type);
-    for (const prim of [this.sessionLayer, this.infoLayer, this.drawings.layer]) {
+    for (const prim of [this.sessionLayer, this.infoLayer, this.profileLayer, this.drawings.layer]) {
       old.detachPrimitive(prim);
       this.candles.attachPrimitive(prim);
     }
@@ -268,6 +271,7 @@ export class ChartPane {
   }
 
   onHistory(m) {
+    if (this.replay) { clearInterval(this.replay.timer); this.replay = null; this.hooks.onReplay?.(this); }
     const d = this.data;
     Object.assign(d, { intraday: m.intraday, hasVolume: m.hasVolume, symbol: m.symbol, description: m.description, info: m.info });
     d.bars = m.bars.map((b) => ({ ...b, time: this.toChartTime(b.time) }));
@@ -288,6 +292,7 @@ export class ChartPane {
   }
 
   onBar(raw) {
+    if (this.replay) { this.replay.pending.push(raw); return; } // live bars wait until replay ends
     const bar = { ...raw, time: this.toChartTime(raw.time) };
     const bars = this.data.bars;
     const last = bars[bars.length - 1];
@@ -301,7 +306,83 @@ export class ChartPane {
     if (this.data.hasVolume) this.volume.update(volBar(bar));
     this.studies.onBar();
     if (isNew || bar.high > this.dayHigh || bar.low < this.dayLow) this.updateRefLines();
+    this.profileLayer.invalidate();
     if (!this.hovering) this.updateLegend();
+  }
+
+  // ---------- bar replay ----------
+
+  /** Starts replaying from bar `index` (hides everything after it). */
+  startReplay(index) {
+    const all = this.replay?.all || this.data.bars;
+    index = Math.max(10, Math.min(all.length - 1, index));
+    this.replay = { all, index, pending: this.replay?.pending || [], playing: false, speed: this.replay?.speed || 1 };
+    this.showReplayBars();
+    this.hooks.onReplay?.(this);
+  }
+
+  showReplayBars() {
+    const r = this.replay;
+    this.data.bars = r.all.slice(0, r.index + 1);
+    this.renderMain();
+    this.volume.setData(this.data.hasVolume ? this.data.bars.map(volBar) : []);
+    this.drawings.mapper.setTimes(this.data.bars.map((b) => b.time));
+    this.studies.runAll(false);
+    this.updateRefLines();
+    this.profileLayer.invalidate();
+    this.updateLegend();
+  }
+
+  replayStep(n = 1) {
+    const r = this.replay;
+    if (!r) return;
+    if (r.index >= r.all.length - 1) { this.replayPlay(false); return; }
+    r.index = Math.min(r.all.length - 1, r.index + n);
+    const bar = r.all[r.index];
+    this.data.bars.push(bar);
+    this.candles.update(this.state.chartType === 'ha' ? heikinAshi(this.data.bars.slice(-300)).at(-1) : OHLC_TYPES.has(this.state.chartType) ? bar : { time: bar.time, value: bar.close });
+    if (this.data.hasVolume) this.volume.update(volBar(bar));
+    this.drawings.mapper.update(bar.time);
+    this.studies.onBar();
+    this.profileLayer.invalidate();
+    this.updateLegend();
+    this.hooks.onReplay?.(this);
+  }
+
+  replayPlay(on) {
+    const r = this.replay;
+    if (!r) return;
+    r.playing = on;
+    clearInterval(r.timer);
+    if (on) r.timer = setInterval(() => this.replayStep(), 1000 / r.speed);
+    this.hooks.onReplay?.(this);
+  }
+
+  replaySpeed(speed) {
+    if (!this.replay) return;
+    this.replay.speed = speed;
+    if (this.replay.playing) this.replayPlay(true);
+  }
+
+  stopReplay() {
+    const r = this.replay;
+    if (!r) return;
+    clearInterval(r.timer);
+    this.replay = null;
+    this.data.bars = r.all;
+    this.showLive(r.pending);
+    this.hooks.onReplay?.(this);
+  }
+
+  showLive(pending) {
+    this.renderMain();
+    this.volume.setData(this.data.hasVolume ? this.data.bars.map(volBar) : []);
+    this.drawings.mapper.setTimes(this.data.bars.map((b) => b.time));
+    for (const raw of pending) this.onBar(raw);
+    this.studies.runAll(false);
+    this.updateRefLines();
+    this.profileLayer.invalidate();
+    this.updateLegend();
   }
 
   // ---------- compare symbols ----------
@@ -403,6 +484,7 @@ export class ChartPane {
     if (key === 'theme') this.applyTheme();
     else if (key === 'tz') { this.syncCorner(); this.subscribe(); }
     else if (key === 'prevClose' || key === 'dayHighLow') this.updateRefLines();
+    else if (key === 'volumeProfile') this.profileLayer.invalidate();
     else this.sessionLayer.requestUpdate?.();
   }
 
@@ -482,6 +564,74 @@ class SessionLayer {
           ctx.lineTo(x, size.height);
           ctx.stroke();
         }
+      }
+    }
+  }
+}
+
+// ---------- visible-range volume profile ----------
+
+class VolumeProfileLayer {
+  constructor(pane) {
+    this.pane = pane;
+    this.view = { zOrder: () => 'bottom', renderer: () => ({ draw: (target) => target.useMediaCoordinateSpace(({ context, mediaSize }) => this.draw(context, mediaSize)) }) };
+  }
+  attached({ requestUpdate }) { this.requestUpdate = requestUpdate; }
+  detached() {}
+  updateAllViews() {}
+  paneViews() { return [this.view]; }
+  invalidate() { this.cache = null; if (settings.volumeProfile) this.requestUpdate?.(); }
+
+  /** Volume by price over the visible bars (each bar's volume spread over its high-low range). */
+  compute() {
+    const p = this.pane, bars = p.data.bars;
+    const range = p.chart.timeScale().getVisibleLogicalRange();
+    if (!range || !p.data.hasVolume) return null;
+    const vis = bars.slice(Math.max(0, Math.floor(range.from)), Math.min(bars.length, Math.ceil(range.to) + 1));
+    if (vis.length < 2) return null;
+    const lo = Math.min(...vis.map((b) => b.low)), hi = Math.max(...vis.map((b) => b.high));
+    if (!(hi > lo)) return null;
+    const rows = 32, step = (hi - lo) / rows;
+    const up = new Float64Array(rows), down = new Float64Array(rows);
+    for (const b of vis) {
+      const v = b.volume || 0;
+      const a = Math.max(0, Math.floor((b.low - lo) / step)), z = Math.min(rows - 1, Math.floor((b.high - lo) / step));
+      const share = v / (z - a + 1);
+      for (let i = a; i <= z; i++) (b.close >= b.open ? up : down)[i] += share;
+    }
+    const total = up.map((u, i) => u + down[i]);
+    const poc = total.indexOf(Math.max(...total));
+    // Value area: grow around the POC until 70% of volume is covered.
+    const sum = total.reduce((x, y) => x + y, 0);
+    let va = total[poc], a = poc, z = poc;
+    while (va < sum * 0.7 && (a > 0 || z < rows - 1)) {
+      const below = a > 0 ? total[a - 1] : -1, above = z < rows - 1 ? total[z + 1] : -1;
+      if (above >= below) va += total[++z]; else va += total[--a];
+    }
+    return { lo, step, rows, up, down, total, poc, va: [a, z], max: total[poc] };
+  }
+
+  draw(ctx, size) {
+    if (!settings.volumeProfile) return;
+    this.cache ||= this.compute();
+    const c = this.cache;
+    if (!c) return;
+    const width = Math.min(220, size.width * 0.25);
+    const s = this.pane.candles;
+    for (let i = 0; i < c.rows; i++) {
+      const y1 = s.priceToCoordinate(c.lo + i * c.step), y2 = s.priceToCoordinate(c.lo + (i + 1) * c.step);
+      if (y1 == null || y2 == null) continue;
+      const h = Math.max(1, Math.abs(y1 - y2) - 1), top = Math.min(y1, y2);
+      const inVa = i >= c.va[0] && i <= c.va[1];
+      const wUp = (c.up[i] / c.max) * width, wDown = (c.down[i] / c.max) * width;
+      const x = size.width - wUp - wDown;
+      ctx.fillStyle = inVa ? 'rgba(38,166,154,.38)' : 'rgba(38,166,154,.16)';
+      ctx.fillRect(x, top, wUp, h);
+      ctx.fillStyle = inVa ? 'rgba(239,83,80,.38)' : 'rgba(239,83,80,.16)';
+      ctx.fillRect(x + wUp, top, wDown, h);
+      if (i === c.poc) {
+        ctx.fillStyle = 'rgba(255,152,0,.9)';
+        ctx.fillRect(0, top + h / 2, size.width, 1);
       }
     }
   }
