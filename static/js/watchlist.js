@@ -19,6 +19,7 @@ const DEFAULT = {
   ],
 };
 const LINE_LIMIT = 100; // IB's default market-data lines per user
+const SORT_COLUMNS = [['symbol', 'Symbol'], ['price', 'Last'], ['change', 'Chg'], ['changePct', 'Chg%']];
 
 export class Watchlist {
   /**
@@ -39,7 +40,8 @@ export class Watchlist {
         el('span', { class: 'wl-title' }, 'Watchlist'),
         el('button', { class: 'small', title: 'Add a section header', onclick: () => this.addSection() }, '+ Section')),
       this.addInput,
-      el('div', { class: 'wl-cols' }, el('span', {}, 'Symbol'), el('span', {}, 'Last'), el('span', {}, 'Chg'), el('span', {}, 'Chg%')),
+      this.cols = el('div', { class: 'wl-cols' }, ...SORT_COLUMNS.map(([key, label]) =>
+        el('span', { class: 'sortable', 'data-key': key, title: 'Click to sort', onclick: () => this.toggleSort(key) }, label))),
       this.body,
       this.footer,
     );
@@ -144,51 +146,147 @@ export class Watchlist {
 
   // ---------- rendering ----------
 
+  // ---------- sorting ----------
+
+  /** Header click: ascending → descending → off (numbers start descending, like TradingView). */
+  toggleSort(key) {
+    const cur = this.data.sort;
+    const first = key === 'symbol' ? 1 : -1;
+    if (!cur || cur.key !== key) this.data.sort = { key, dir: first };
+    else if (cur.dir === first) this.data.sort = { key, dir: -first };
+    else this.data.sort = null;
+    this.changed();
+  }
+
+  /** Items in display order as [{ item, idx }]; sorting applies within each section. */
+  viewItems() {
+    const items = this.data.items.map((item, idx) => ({ item, idx }));
+    const sort = this.data.sort;
+    if (!sort) return items;
+    const value = ({ item }) => (sort.key === 'symbol' ? item.symbol : this.quotes.get(item.symbol)?.[sort.key]);
+    const cmp = (a, b) => {
+      const va = value(a), vb = value(b);
+      if (va == null || Number.isNaN(va)) return 1; // missing values last
+      if (vb == null || Number.isNaN(vb)) return -1;
+      return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
+    };
+    const out = [];
+    let group = [];
+    const flush = () => { out.push(...group.sort(cmp)); group = []; };
+    for (const it of items) {
+      if (it.item.type === 'section') { flush(); out.push(it); } else group.push(it);
+    }
+    flush();
+    return out;
+  }
+
+  // ---------- rendering ----------
+
   render() {
-    fill(this.body, ...this.data.items.map((item, idx) => (item.type === 'section' ? this.sectionRow(item, idx) : this.symbolRow(item, idx))));
+    const view = this.viewItems();
+    fill(this.body, ...view.map(({ item, idx }, pos) => {
+      const row = item.type === 'section' ? this.sectionRow(item, idx) : this.symbolRow(item, idx);
+      row.dataset.pos = pos;
+      return this.draggable(row, pos);
+    }));
     this.highlight();
+    const sort = this.data.sort;
+    this.cols.querySelectorAll('.sortable').forEach((h) => {
+      const on = sort?.key === h.dataset.key;
+      h.classList.toggle('sorted', on);
+      h.dataset.arrow = on ? (sort.dir > 0 ? '▲' : '▼') : '';
+    });
     const n = this.symbols().length;
     this.footer.className = `wl-footer ${n > LINE_LIMIT * 0.9 ? 'warn' : ''}`;
-    this.footer.textContent = n > LINE_LIMIT * 0.9
+    this.footer.textContent = (n > LINE_LIMIT * 0.9
       ? `${n} symbols — close to IB's ${LINE_LIMIT} market-data line limit`
-      : `${n} symbol${n === 1 ? '' : 's'}`;
+      : `${n} symbol${n === 1 ? '' : 's'}`) + (sort ? ' · sorted (drag a row to reorder by hand)' : ' · drag rows to reorder');
   }
 
   sectionRow(item, idx) {
     const title = el('span', { class: 'wl-section-title', title: 'Double-click to rename' }, item.title);
     title.addEventListener('dblclick', () => this.editTitle(title, item));
-    return this.draggable(el('div', { class: 'wl-section' }, title,
-      el('button', { class: 'wl-x', title: 'Remove section', onclick: () => { this.data.items.splice(idx, 1); this.changed(); } }, '×')), idx);
+    return el('div', { class: 'wl-section' }, title,
+      el('button', { class: 'wl-x', title: 'Remove section', onclick: () => { this.data.items.splice(idx, 1); this.changed(); } }, '×'));
   }
 
-  symbolRow(item, idx) {
-    const row = el('div', { class: 'wl-row', 'data-symbol': item.symbol, onclick: () => this.hooks.onPick(item.symbol) },
+  symbolRow(item) {
+    const row = el('div', { class: 'wl-row', 'data-symbol': item.symbol, onclick: () => { if (!this.justDragged) this.hooks.onPick(item.symbol); } },
       el('span', { class: 'wl-sym' }, item.symbol, el('span', { class: 'wl-badge' })),
       el('span', { class: 'wl-last' }), el('span', { class: 'wl-chg' }), el('span', { class: 'wl-pct' }),
       el('button', { class: 'wl-x', title: 'Remove', onclick: (e) => { e.stopPropagation(); this.remove(item.symbol); } }, '×'));
     this.paint(row, this.quotes.get(item.symbol));
-    return this.draggable(row, idx);
+    return row;
   }
 
-  draggable(row, idx) {
-    row.draggable = true;
-    row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(idx)); row.classList.add('dragging'); });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
-    row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drop'); });
-    row.addEventListener('dragleave', () => row.classList.remove('drop'));
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      row.classList.remove('drop');
-      const from = Number(e.dataTransfer.getData('text/plain'));
-      if (Number.isNaN(from) || from === idx) return;
-      const [moved] = this.data.items.splice(from, 1);
-      this.data.items.splice(idx, 0, moved);
-      this.changed();
+  /**
+   * Pointer-based drag to reorder. (Native HTML drag-and-drop doesn't work in the
+   * desktop app, where the window intercepts drags for file drops.)
+   */
+  draggable(row, pos) {
+    row.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('button') || e.target.isContentEditable) return;
+      const startY = e.clientY;
+      let dragging = false, target = pos;
+      const indicator = el('div', { class: 'wl-drop' });
+      const move = (ev) => {
+        if (!dragging) {
+          if (Math.abs(ev.clientY - startY) < 5) return;
+          dragging = true;
+          row.classList.add('dragging');
+          this.body.append(indicator);
+          document.body.classList.add('wl-dragging');
+        }
+        // Insertion point = before the first row whose middle is below the pointer.
+        const rows = [...this.body.querySelectorAll('[data-pos]')];
+        target = rows.length;
+        for (const r of rows) {
+          const b = r.getBoundingClientRect();
+          if (ev.clientY < b.top + b.height / 2) { target = Number(r.dataset.pos); break; }
+        }
+        const ref = rows[target] || rows[rows.length - 1];
+        const rb = ref.getBoundingClientRect(), bb = this.body.getBoundingClientRect();
+        indicator.style.top = `${(rows[target] ? rb.top : rb.bottom) - bb.top + this.body.scrollTop - 1}px`;
+        // Auto-scroll near the edges.
+        if (ev.clientY < bb.top + 24) this.body.scrollTop -= 8;
+        if (ev.clientY > bb.bottom - 24) this.body.scrollTop += 8;
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        if (!dragging) return;
+        row.classList.remove('dragging');
+        indicator.remove();
+        document.body.classList.remove('wl-dragging');
+        this.justDragged = true;
+        setTimeout(() => { this.justDragged = false; }, 0); // swallow the click that follows
+        this.moveTo(pos, target);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
     });
     return row;
   }
 
+  /** Moves the row at display position `from` to before display position `to`. */
+  moveTo(from, to) {
+    const order = this.viewItems().map(({ item }) => item); // keep what the user sees
+    if (to === from || to === from + 1) {
+      if (!this.data.sort) return;
+    } else {
+      const [moved] = order.splice(from, 1);
+      order.splice(to > from ? to - 1 : to, 0, moved);
+    }
+    this.data.items = order;
+    this.data.sort = null; // a manual order replaces sorting
+    this.changed();
+  }
+
   onQuote(q) {
+    // Keep a price-based sort current, without re-rendering on every tick.
+    if (this.data.sort && this.data.sort.key !== 'symbol' && !this.resortTimer) {
+      this.resortTimer = setTimeout(() => { this.resortTimer = null; if (!document.body.classList.contains('wl-dragging')) this.render(); }, 2000);
+    }
     const prev = this.quotes.get(q.symbol);
     if (q.error && prev && !prev.error) q = { ...prev, stale: true }; // keep last good values
     this.quotes.set(q.symbol, q);

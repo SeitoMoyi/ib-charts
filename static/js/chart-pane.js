@@ -125,6 +125,14 @@ export class ChartPane {
     }));
   }
 
+  /**
+   * Turns auto-scaling back on for every pane. Dragging a price axis switches it off,
+   * which would otherwise leave a new symbol's prices off-screen.
+   */
+  fitPrices() {
+    this.chart.panes().forEach((pane) => pane.priceScale('right').applyOptions({ autoScale: true }));
+  }
+
   /** Your average cost as a price line (positions panel). */
   setPositionLine(pos) {
     if (this.posLine) this.candles.removePriceLine(this.posLine);
@@ -305,6 +313,7 @@ export class ChartPane {
     this.updateRefLines();
     this.chart.timeScale().applyOptions({ timeVisible: m.intraday, secondsVisible: /s$/.test(this.state.tf) });
     this.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, d.bars.length - 150), to: d.bars.length + 8 });
+    this.fitPrices();
     this.syncCorner();
     this.status(`${m.symbol} ${this.state.tf} · live`, 'live');
     this.drawings.setBars(d.bars, m.info?.key ?? m.symbol);
