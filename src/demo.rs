@@ -166,7 +166,8 @@ pub async fn quotes(symbol: String, publish: impl Fn(WireQuote)) {
             close: Some(close),
             change: Some(change),
             change_pct: Some(change / close * 100.0),
-            data_type: Some("realtime"),
+            // Indices act like an unsubscribed feed so the delayed-data badges can be tried.
+            data_type: Some(if symbol.starts_with('^') { "delayed" } else { "realtime" }),
             ..Default::default()
         });
         tokio::time::sleep(Duration::from_secs(1)).await;

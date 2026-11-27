@@ -490,3 +490,12 @@ body.wl-dragging, body.wl-dragging * { cursor: grabbing !important; }
 .gex-curve { padding: 0 4px; box-sizing: border-box; }
 .gex-tip { position: absolute; left: 60px; z-index: 3; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-size: 12px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
 .small { font-size: 11px; }
+
+/* ---------- data-type badges ---------- */
+.data-badge { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 2px; cursor: help; pointer-events: auto; }
+.data-badge.delayed { background: #ff9800; color: #131722; }
+.data-badge.frozen { background: var(--border); color: var(--text); }
+.data-badge.nosub { background: var(--down); color: #fff; }
+#dot.warn { background: #ff9800; }
+#status.warn { color: #ff9800; }
+.gex-delayed { margin: 0 10px 8px; padding: 6px 8px; border-radius: 4px; background: rgba(255,152,0,.12); font-size: 12px; }

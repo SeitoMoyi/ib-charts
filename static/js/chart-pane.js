@@ -40,7 +40,7 @@ export class ChartPane {
 
     this.root = el('div', { class: 'pane' });
     this.legend = el('div', { class: 'legend' },
-      el('div', { class: 'legend-title' }, el('span', { class: 'legend-symbol' }), ' ', el('span', { class: 'legend-desc' })),
+      el('div', { class: 'legend-title' }, el('span', { class: 'legend-symbol' }), ' ', el('span', { class: 'data-badge', hidden: true }), ' ', el('span', { class: 'legend-desc' })),
       el('div', { class: 'legend-ohlc' }),
       el('div', { class: 'legend-compares' }));
     this.chartEl = el('div', { class: 'chart' });
@@ -87,6 +87,16 @@ export class ChartPane {
       this.updateLegend(has ? this.barAtOrBefore(p.time) : null);
     });
 
+    // Real-time / delayed / frozen: IB reports it on the symbol's quote stream.
+    this.dataStatus = { type: null, noSub: false, notes: [] };
+    this.onQuote = (m) => {
+      if (m.type !== 'quote' || m.quote.symbol !== this.state.symbol.toUpperCase()) return;
+      const q = m.quote;
+      if (q.dataType && q.dataType !== this.dataStatus.type) { this.dataStatus.type = q.dataType; this.renderDataBadge(); }
+      if (q.error && /354|not subscribed/i.test(q.error) && !this.dataStatus.noSub) { this.dataStatus.noSub = true; this.renderDataBadge(); }
+    };
+    feed.onGlobal(this.onQuote);
+
     this.subscribe();
   }
 
@@ -98,6 +108,8 @@ export class ChartPane {
 
   destroy() {
     this.feed.unsubscribe(this.id);
+    this.feed.offGlobal(this.onQuote);
+    this.feed.setQuotes([], `chart:${this.id}`);
     for (const sym of this.compareSeries.keys()) this.feed.unsubscribe(`${this.id}:cmp:${sym}`);
     clearInterval(this.infoLayer.timer);
     this.studies.dispose();
@@ -295,6 +307,9 @@ export class ChartPane {
 
   subscribe() {
     const { symbol, tf, rth } = this.state;
+    this.dataStatus = { type: null, noSub: false, notes: [] };
+    this.renderDataBadge();
+    this.feed.setQuotes([symbol], `chart:${this.id}`);
     this.feed.subscribe(this.id, { symbol, tf, rth }, (m) => this.onMessage(m));
     for (const c of this.state.compares) this.subscribeCompare(c);
     this.changed();
@@ -307,6 +322,7 @@ export class ChartPane {
     switch (m.type) {
       case 'status': this.status(m.message); break;
       case 'error': this.status(m.message, 'err'); break;
+      case 'notice': this.onNotice(m); break;
       case 'ended': this.status('Stream ended — resubscribing…', 'err'); break;
       case 'history': this.onHistory(m); break;
       case 'bar': this.onBar(m.bar); break;
@@ -427,6 +443,36 @@ export class ChartPane {
     this.updateRefLines();
     this.profileLayer.invalidate();
     this.updateLegend();
+  }
+
+  // ---------- data type badge ----------
+
+  /** IB notices on the bar stream, e.g. 10167 "not subscribed, displaying delayed data". */
+  onNotice(m) {
+    const st = this.dataStatus;
+    if (!st.notes.some((n) => n.code === m.code)) st.notes.push({ code: m.code, message: m.message });
+    if ([10167, 10168].includes(m.code) && !st.type) st.type = 'delayed';
+    if (m.code === 354) st.noSub = true;
+    this.renderDataBadge();
+  }
+
+  renderDataBadge() {
+    const badge = this.legend?.querySelector('.data-badge');
+    if (!badge) return;
+    const { type, noSub, notes } = this.dataStatus;
+    const BADGES = {
+      delayed: ['D', 'delayed', 'Delayed data (usually 15 min) — no real-time subscription for this market'],
+      delayedFrozen: ['D', 'delayed', 'Delayed data; market closed, showing the last delayed values'],
+      frozen: ['Closed', 'frozen', 'Market closed — showing the last real-time values'],
+    };
+    let b = BADGES[type];
+    if (!b && noSub) b = ['No live data', 'nosub', 'IB has no market data subscription for this symbol (error 354); the chart shows historical bars only'];
+    badge.hidden = !b;
+    if (!b) return;
+    badge.textContent = b[0];
+    badge.className = `data-badge ${b[1]}`;
+    badge.title = [b[2], ...notes.map((n) => `IB ${n.code}: ${n.message}`)].join('\n');
+    if (b[1] === 'delayed' || b[1] === 'nosub') this.status(`${this.data.symbol || this.state.symbol} ${this.state.tf} · ${b[1] === 'delayed' ? 'delayed' : 'no live data'}`, 'warn');
   }
 
   // ---------- compare symbols ----------

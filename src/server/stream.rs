@@ -15,7 +15,7 @@ use axum::response::Response;
 use futures::{SinkExt, StreamExt};
 use ibapi::market_data::TradingHours;
 use ibapi::market_data::historical::{Bar, BarTimestamp, HistoricalBarUpdate};
-use ibapi::subscriptions::SubscriptionItemStreamExt;
+use ibapi::subscriptions::SubscriptionItem;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -249,9 +249,17 @@ async fn stream_bars(st: &AppState, out: &Out, input: &str, tf_id: &str, rth: bo
         .await
         .map_err(|e| anyhow!("historical data request failed: {e}"))?;
 
-    let mut updates = subscription.filter_data();
-    while let Some(update) = updates.next().await {
-        match update.map_err(|e| anyhow!("{e}"))? {
+    let mut updates = subscription;
+    while let Some(item) = updates.next().await {
+        let update = match item.map_err(|e| anyhow!("{e}"))? {
+            SubscriptionItem::Data(u) => u,
+            // e.g. 10167 "not subscribed, displaying delayed data", 2188 "up-to-the-second data needs a subscription"
+            SubscriptionItem::Notice(n) => {
+                out.send(json!({"type": "notice", "code": n.code, "message": n.message})).await;
+                continue;
+            }
+        };
+        match update {
             HistoricalBarUpdate::Historical(data) => {
                 let bars: Vec<_> = data.bars.iter().map(|b| wire_bar(b, r.has_volume)).collect();
                 out.send(json!({
@@ -292,6 +300,11 @@ async fn stream_demo(out: &Out, input: &str, tf_id: &str, intraday: bool) -> Res
         "bars": series.history,
     }))
     .await;
+    if symbol.starts_with('^') {
+        // Mimic IB's notice for an unsubscribed feed so the delayed badge can be tried.
+        out.send(json!({"type": "notice", "code": 10167, "message": "Requested market data is not subscribed. Displaying delayed market data. (demo)"}))
+            .await;
+    }
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         out.send(json!({"type": "bar", "bar": series.tick()})).await;

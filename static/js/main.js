@@ -38,7 +38,7 @@ feed.onConnection((up) => { if (!up) setStatus('Disconnected from ib-charts — 
 
 function setStatus(text, kind = '') {
   $('status-text').textContent = text;
-  $('status').className = kind === 'err' ? 'err' : '';
+  $('status').className = kind === 'err' ? 'err' : kind === 'warn' ? 'warn' : '';
   $('dot').className = kind;
   $('status').title = text;
 }

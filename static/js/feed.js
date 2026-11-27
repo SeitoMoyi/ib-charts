@@ -23,6 +23,10 @@ export class Feed {
     for (const m of this.lastGlobal.values()) cb(m);
   }
 
+  offGlobal(cb) {
+    this.globalListeners.delete(cb);
+  }
+
   resubscribeAll() {
     for (const id of this.subs.keys()) this.send(id);
   }

@@ -44,6 +44,7 @@ TradingView-style charts that run on your own computer and use the market data y
   - **Requirements:** IB's US options data (OPRA). One calculation streams a few hundred options and takes about 20–60 s.
   - **Assumption:** dealers are long calls and short puts (the usual GEX convention).
 - **IB Gateway auto-start and login** (via IBC), with a status indicator and a log viewer.
+- **Delayed-data badges.** Charts and the watchlist show **D** when IB is sending delayed data (no real-time subscription for that market), **Closed** for frozen last values, and **No live data** when there's no subscription at all. IB's explanation is in the tooltip. GEX flags delayed option data the same way.
 - **Symbol search** with autocomplete. Start typing anywhere on the page to change the symbol.
 - **Read-only.** The code only requests market data and contains no order placement code.
 
